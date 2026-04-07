@@ -21,7 +21,7 @@
   <Import Project="Common.Build.Windows.targets" Condition="'$(IsWindows)' == 'true'"/>
 
   <!-- Content-hash based linker caching: hash all .o/.obj + exports file -->
-  <Target Name="CheckLinkCache" DependsOnTargets="$(LinkTargetDependsOn)" AfterTargets="Build" BeforeTargets="LinkTarget">
+  <Target Name="CheckLinkCache" DependsOnTargets="$(LinkTargetDependsOn)">
     <PropertyGroup>
       <ElfBinary>$([MSBuild]::NormalizePath('$(OutputPath)', '$(AssemblyName).elf'))</ElfBinary>
       <AsmObjDir>$([MSBuild]::NormalizePath('$(IntermediateOutputPath)', 'cosmos', 'asm'))</AsmObjDir>
@@ -54,7 +54,7 @@
              Text="Linker cache hit — skipping link (hash: $(_CurrentLinkHash))" />
   </Target>
 
-  <Target Name="LinkTarget" DependsOnTargets="CheckLinkCache" AfterTargets="CheckLinkCache">
+  <Target Name="LinkTarget" DependsOnTargets="CheckLinkCache" AfterTargets="Build">
     <ItemGroup Condition="'$(_LinkCacheHit)' != 'true'">
       <ObjFiles Include="$(AsmObjDir)/*.obj"/>
       <ObjFiles Include="$(CObjDir)/*.obj"/>
@@ -94,7 +94,7 @@
   </Target>
 
   <!-- Content-hash based ISO caching: hash ELF + limine.conf -->
-  <Target Name="CheckIsoCache" AfterTargets="LinkTarget" BeforeTargets="BuildISO">
+  <Target Name="CheckIsoCache" DependsOnTargets="LinkTarget">
     <PropertyGroup>
       <_IsoCacheFile>$([MSBuild]::NormalizePath('$(IntermediateOutputPath)', 'cosmos', '.iso-hash'))</_IsoCacheFile>
       <_LimineConf>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', 'Bootloader', 'limine.conf'))</_LimineConf>
@@ -122,7 +122,7 @@
              Text="ISO cache hit — skipping ISO creation (hash: $(_CurrentIsoHash))" />
   </Target>
 
-  <Target Name="BuildISO" AfterTargets="CheckIsoCache">
+  <Target Name="BuildISO" DependsOnTargets="CheckIsoCache" AfterTargets="LinkTarget">
     <Message Condition="'$(_IsoCacheHit)' != 'true'" Text="Creating ISO image with Limine..." Importance="High"/>
 
     <!-- Remove old ISO directory if it exists -->
