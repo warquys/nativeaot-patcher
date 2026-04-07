@@ -141,15 +141,43 @@
     <Message Importance="High" Text="Assemblies selected for patching:" />
     <Message Importance="High" Text="  %(AssembliesToPatch.Identity) -> %(AssembliesToPatch.PatcherOutputPath)" />
 
-    <!-- Copy all non-patched candidates to the ref folder so ILC can resolve them -->
+    <!-- Compute patcher cache hash to skip patching when inputs haven't changed.
+         The patcher produces non-deterministic output (Mono.Cecil generates new MVIDs),
+         so we cache based on INPUTS, not outputs. -->
+    <PropertyGroup>
+      <_PatcherCacheFile>$(IntermediateOutputPath)/cosmos/.patcher-hash</_PatcherCacheFile>
+    </PropertyGroup>
+
+    <ComputeInputsHashTask InputFiles="@(AssembliesToPatch);@(PlugRef)">
+      <Output TaskParameter="Hash" PropertyName="_CurrentPatcherHash" />
+    </ComputeInputsHashTask>
+
+    <ReadLinesFromFile File="$(_PatcherCacheFile)" Condition="Exists('$(_PatcherCacheFile)')">
+      <Output TaskParameter="Lines" ItemName="_PreviousPatcherHashLines" />
+    </ReadLinesFromFile>
+
+    <PropertyGroup>
+      <_PreviousPatcherHash>@(_PreviousPatcherHashLines)</_PreviousPatcherHash>
+      <_PatcherCacheHit Condition="'$(_CurrentPatcherHash)' != '' AND '$(_CurrentPatcherHash)' == '$(_PreviousPatcherHash)'">true</_PatcherCacheHit>
+    </PropertyGroup>
+
+    <Message Condition="'$(_PatcherCacheHit)' == 'true'" Importance="High"
+             Text="Patcher cache hit — skipping patching (hash: $(_CurrentPatcherHash))" />
+
+    <!-- Build the set of non-patched assemblies to copy to ref/ for ILC resolution.
+         Use %(Filename) matching instead of full-path Contains() for robustness. -->
+    <ItemGroup>
+      <_PatchedFilenames Include="@(AssembliesToPatch->'%(Filename)')" />
+    </ItemGroup>
     <ItemGroup>
       <AssembliesToCopy Include="@(CandidateAssemblies)"
-                        Condition="$([System.String]::new('@(AssembliesToPatch, ';')').Contains('%(CandidateAssemblies.Identity)')) == false" />
+                        Condition="'@(_PatchedFilenames)' == '' OR !@(_PatchedFilenames->AnyHaveMetadataValue('Identity', '%(CandidateAssemblies.Filename)'))" />
     </ItemGroup>
 
+    <!-- Always copy non-patched assemblies (even on cache hit) so ILC sees updated references.
+         SkipUnchangedFiles avoids redundant I/O. -->
     <Message Importance="Low" Text="Assemblies copied (no patch): %(AssembliesToCopy.Identity) -> %(AssembliesToCopy.PatcherOutputPath)" />
 
-    <!-- Ensure copy target directories exist -->
     <ItemGroup>
       <CopyDirs Include="@(AssembliesToCopy->'$([System.IO.Path]::GetDirectoryName(%(PatcherOutputPath)))')" />
     </ItemGroup>
@@ -162,11 +190,10 @@
           DestinationFiles="@(AssembliesToCopy->'%(PatcherOutputPath)')"
           SkipUnchangedFiles="true" />
 
-    <!-- Copy PDB files for debug symbols -->
-    <!-- Copy main assembly PDB to cosmos folder -->
+    <!-- Copy PDB files for debug symbols (skip on cache hit) -->
     <Copy SourceFiles="$(OutputPath)$(AssemblyName).pdb"
           DestinationFiles="$(IntermediateOutputPath)/cosmos/$(AssemblyName)_patched.pdb"
-          Condition="Exists('$(OutputPath)$(AssemblyName).pdb')"
+          Condition="'$(_PatcherCacheHit)' != 'true' AND Exists('$(OutputPath)$(AssemblyName).pdb')"
           SkipUnchangedFiles="true" />
   </Target>
 

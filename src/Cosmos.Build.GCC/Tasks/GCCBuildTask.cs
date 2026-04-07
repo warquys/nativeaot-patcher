@@ -81,8 +81,19 @@ public sealed class GCCBuildTask : ToolTask
             Log.LogMessage(MessageImportance.Normal, $"Using GCC include path: {gccIncludePath}");
         }
 
-        // Execute the GCC command for each C file
+        // Validate GCC path exists (once, before the loop)
+        string toolPath = GenerateFullPathToTool().Trim();
+        GCCPath = toolPath; // normalize for downstream checks
+
+        if (!File.Exists(toolPath) && !TestGCCInPath())
+        {
+            Log.LogError($"GCC not found at {toolPath}. Ensure the cross-compiler is installed and on PATH.");
+            return false;
+        }
+
+        // Execute the GCC command for each C file (with incremental support via content-hash filenames)
         using SHA1? hasher = SHA1.Create();
+        var validOutputFiles = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (string file in sourceFilePaths)
         {
@@ -97,6 +108,15 @@ public sealed class GCCBuildTask : ToolTask
             string objExt = Path.DirectorySeparatorChar == '\\' ? ".obj" : ".o";
             string outputName = $"{baseName}-{fileHashString.Substring(0, 8)}{objExt}";
             string outputPath = Path.Combine(OutputPath!, outputName);
+
+            validOutputFiles.Add(outputPath);
+
+            // Skip if output already exists (content-hash filename = up-to-date)
+            if (File.Exists(outputPath))
+            {
+                Log.LogMessage(MessageImportance.Normal, $"Skipping {file} (up to date: {outputName})");
+                continue;
+            }
 
             // Build and execute the command for this file
             StringBuilder sb = new();
@@ -124,16 +144,6 @@ public sealed class GCCBuildTask : ToolTask
             string commandLineArguments = sb.ToString();
             Log.LogMessage(MessageImportance.Normal, $"Compiling {file} with args: {commandLineArguments}");
 
-            // Validate GCC path exists
-            string toolPath = GenerateFullPathToTool().Trim();
-            GCCPath = toolPath; // normalize for downstream checks
-
-            if (!File.Exists(toolPath) && !TestGCCInPath())
-            {
-                Log.LogError($"GCC not found at {toolPath}. Ensure the cross-compiler is installed and on PATH.");
-                return false;
-            }
-
             if (!ExecuteCommand(toolPath, commandLineArguments))
             {
                 Log.LogError($"Failed to compile {file}");
@@ -142,7 +152,32 @@ public sealed class GCCBuildTask : ToolTask
             }
         }
 
-        Log.LogMessage(MessageImportance.High, "✅ GCCBuildTask completed successfully.");
+        // Remove orphan object files from THIS source directory only (renamed/deleted source files).
+        // Multiple GCCBuildTask invocations share cobj/, so we only clean files whose base name
+        // prefix (before the hash) matches a source file we know about.
+        string objExt2 = Path.DirectorySeparatorChar == '\\' ? ".obj" : ".o";
+        var sourceBaseNames = new System.Collections.Generic.HashSet<string>(
+            sourceFilePaths.Select(f => Path.GetFileNameWithoutExtension(f)),
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (string existing in Directory.GetFiles(OutputPath!, "*" + objExt2))
+        {
+            if (validOutputFiles.Contains(existing))
+                continue;
+
+            // Extract base name before the hash suffix: "kmain-a1b2c3d4.o" -> "kmain"
+            string fileName = Path.GetFileNameWithoutExtension(existing);
+            int dashIdx = fileName.LastIndexOf('-');
+            string baseName = dashIdx > 0 ? fileName.Substring(0, dashIdx) : fileName;
+
+            if (sourceBaseNames.Contains(baseName))
+            {
+                Log.LogMessage(MessageImportance.Normal, $"Removing orphan object: {Path.GetFileName(existing)}");
+                File.Delete(existing);
+            }
+        }
+
+        Log.LogMessage(MessageImportance.High, "GCCBuildTask completed successfully.");
         return true;
     }
 
