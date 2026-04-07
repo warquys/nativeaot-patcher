@@ -207,7 +207,7 @@ jobs:
   test-summary:
     name: Test Summary
     runs-on: ubuntu-latest
-    needs: [ helloworld-tests, memory-tests, typecasting-tests, timer-tests, network-tests, threading-tests, graphic-tests ]
+    needs: [ helloworld-results, memory-results, typecasting-results, timer-results, network-results, threading-results, graphic-results ]
     if: always()
     steps:
       - name: 📊 Generate Summary
