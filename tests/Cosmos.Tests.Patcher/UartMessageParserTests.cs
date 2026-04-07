@@ -10,7 +10,7 @@ namespace Cosmos.Tests.Patcher;
 public class UartMessageParserTests
 {
     [Fact]
-    public void ParseUartLog_ShouldNotLoseFramesAfterArchitectureInfoMessage()
+    public void ParseUartLog_DoesNotLoseFramesAfterArchitectureInfoMessage()
     {
         List<byte> stream = new();
         stream.AddRange(CreateFrame(Ds2Vs.TestSuiteStart, [1, 0, (byte)'S', (byte)'u', (byte)'i', (byte)'t', (byte)'e']));

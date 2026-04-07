@@ -135,9 +135,7 @@ public class UartMessageParser
                 return true;
 
             default:
-                // Frame was structurally valid and already consumed.
-                // Treat unknown command IDs in the allowed range as non-fatal.
-                return true;
+                return false;
         }
     }
 
