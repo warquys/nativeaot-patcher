@@ -60,6 +60,36 @@ public class InstallCommand : AsyncCommand<InstallSettings>
             string packageManager = PlatformInfo.GetPackageManager();
             var processed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             bool hasDownloadedTools = false;
+            bool needsPackageInstall = false;
+
+            // Check if any tools need package manager installation
+            foreach (var tool in ToolDefinitions.GetAllTools())
+            {
+                if (tool is not CommandToolDefinition cmdTool)
+                {
+                    continue;
+                }
+
+                var info = cmdTool.GetInstallInfo(PlatformInfo.CurrentOS);
+                if (info is { Method: "package" })
+                {
+                    var status = await ToolChecker.CheckToolAsync(tool);
+                    if (!status.Found)
+                    {
+                        needsPackageInstall = true;
+                        break;
+                    }
+                }
+            }
+
+            // Update package index once before installing any packages
+            if (needsPackageInstall && packageManager is "apt" or "dnf")
+            {
+                string updateCmd = packageManager == "apt" ? "apt-get update" : "dnf check-update";
+                AnsiConsole.Markup($"  Updating package index ({packageManager}) ... ");
+                bool ok = await RunPackageManagerAsync(packageManager, [], isUpdate: true);
+                AnsiConsole.MarkupLine(ok ? "[green]OK[/]" : "[yellow]SKIPPED[/]");
+            }
 
             foreach (var tool in ToolDefinitions.GetAllTools())
             {
@@ -817,9 +847,24 @@ public class InstallCommand : AsyncCommand<InstallSettings>
         _ => throw new InvalidOperationException($"Unknown package manager: {packageManager}")
     };
 
-    private static async Task<bool> RunPackageManagerAsync(string packageManager, IEnumerable<string> packages)
+    private static async Task<bool> RunPackageManagerAsync(string packageManager, IEnumerable<string> packages, bool isUpdate = false)
     {
-        var (command, args) = GetPackageManagerCommand(packageManager, packages);
+        string command;
+        string args;
+        if (isUpdate)
+        {
+            (command, args) = packageManager switch
+            {
+                "apt" => ("sudo", "apt-get update -qq"),
+                "dnf" => ("sudo", "dnf check-update"),
+                _ => throw new InvalidOperationException($"Update not supported for: {packageManager}")
+            };
+        }
+        else
+        {
+            (command, args) = GetPackageManagerCommand(packageManager, packages);
+        }
+
         using var proc = Process.Start(new ProcessStartInfo
         {
             FileName = command,
