@@ -83,9 +83,14 @@ public class BuildFixture
         }
 
         using Process process = Process.Start(psi)!;
-        string stdout = process.StandardOutput.ReadToEnd();
-        string stderr = process.StandardError.ReadToEnd();
-        process.WaitForExit(TimeSpan.FromMinutes(5));
+
+        // Read stdout/stderr concurrently to avoid deadlocks
+        Task<string> stdoutTask = process.StandardOutput.ReadToEndAsync();
+        Task<string> stderrTask = process.StandardError.ReadToEndAsync();
+        process.WaitForExit((int)TimeSpan.FromMinutes(5).TotalMilliseconds);
+
+        string stdout = stdoutTask.GetAwaiter().GetResult();
+        string stderr = stderrTask.GetAwaiter().GetResult();
 
         return new BuildResult(process.ExitCode == 0, stdout, stderr);
     }
@@ -143,4 +148,8 @@ public class BuildFixture
     }
 }
 
-public record BuildResult(bool Success, string Stdout, string Stderr);
+public record BuildResult(bool Success, string Stdout, string Stderr)
+{
+    /// <summary>Combined stdout+stderr for assertion messages (MSBuild writes errors to stdout).</summary>
+    public string Output => string.IsNullOrEmpty(Stderr) ? Stdout : $"{Stdout}\n--- stderr ---\n{Stderr}";
+}

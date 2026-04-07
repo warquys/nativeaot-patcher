@@ -35,7 +35,7 @@ public class BuildCacheTests : IClassFixture<BuildFixture>
 
         BuildResult result = _fixture.Build();
 
-        Assert.True(result.Success, $"Clean build failed:\n{result.Stderr}");
+        Assert.True(result.Success, $"Clean build failed:\n{result.Output}");
         Assert.True(File.Exists(_fixture.ElfFile), "ELF binary not produced");
         Assert.True(File.Exists(_fixture.IsoFile), "ISO not produced");
         Assert.True(File.Exists(_fixture.PatcherHashFile), "Patcher cache hash not written");
@@ -62,7 +62,7 @@ public class BuildCacheTests : IClassFixture<BuildFixture>
         Thread.Sleep(1100); // Ensure filesystem timestamp resolution
         BuildResult result = _fixture.Build();
 
-        Assert.True(result.Success, $"No-change rebuild failed:\n{result.Stderr}");
+        Assert.True(result.Success, $"No-change rebuild failed:\n{result.Output}");
 
         // Cache hits
         Assert.Contains("Patcher cache hit", result.Stdout);
@@ -103,7 +103,7 @@ public class BuildCacheTests : IClassFixture<BuildFixture>
         using IDisposable marker = _fixture.InjectMarker(_fixture.DevKernelCs, "cs");
         BuildResult result = _fixture.Build();
 
-        Assert.True(result.Success, $"Build after C# change failed:\n{result.Stderr}");
+        Assert.True(result.Success, $"Build after C# change failed:\n{result.Output}");
 
         // Patcher must re-run (input DLL changed)
         Assert.DoesNotContain("Patcher cache hit", result.Stdout);
@@ -131,13 +131,13 @@ public class BuildCacheTests : IClassFixture<BuildFixture>
         // The marker was reverted by the using in test 3.
         // Rebuild should re-cache and then be stable.
         BuildResult result = _fixture.Build();
-        Assert.True(result.Success, $"Rebuild failed:\n{result.Stderr}");
+        Assert.True(result.Success, $"Rebuild failed:\n{result.Output}");
 
         DateTime elfBefore = File.GetLastWriteTimeUtc(_fixture.ElfFile);
         Thread.Sleep(1100);
 
         BuildResult result2 = _fixture.Build();
-        Assert.True(result2.Success, $"Second rebuild failed:\n{result2.Stderr}");
+        Assert.True(result2.Success, $"Second rebuild failed:\n{result2.Output}");
 
         Assert.Contains("Patcher cache hit", result2.Stdout);
         Assert.Contains("ILC cache hit", result2.Stdout);
@@ -159,7 +159,7 @@ public class BuildCacheTests : IClassFixture<BuildFixture>
         using IDisposable marker = _fixture.InjectMarker(_fixture.AsmFile, "asm");
         BuildResult result = _fixture.Build();
 
-        Assert.True(result.Success, $"Build after ASM change failed:\n{result.Stderr}");
+        Assert.True(result.Success, $"Build after ASM change failed:\n{result.Output}");
 
         // Patcher + ILC should be cached (ASM doesn't affect managed code)
         Assert.Contains("Patcher cache hit", result.Stdout);
@@ -191,7 +191,7 @@ public class BuildCacheTests : IClassFixture<BuildFixture>
         using IDisposable marker = _fixture.InjectMarker(_fixture.CFile, "c");
         BuildResult result = _fixture.Build();
 
-        Assert.True(result.Success, $"Build after C change failed:\n{result.Stderr}");
+        Assert.True(result.Success, $"Build after C change failed:\n{result.Output}");
 
         // Patcher + ILC cached
         Assert.Contains("Patcher cache hit", result.Stdout);
@@ -221,7 +221,7 @@ public class BuildCacheTests : IClassFixture<BuildFixture>
         try
         {
             BuildResult result = _fixture.Build();
-            Assert.True(result.Success, $"Build with temp C file failed:\n{result.Stderr}");
+            Assert.True(result.Success, $"Build with temp C file failed:\n{result.Output}");
 
             // Verify object was created
             string[] orphanObjs = Directory.GetFiles(_fixture.CObjDir, "cache_test_orphan-*");
@@ -235,7 +235,7 @@ public class BuildCacheTests : IClassFixture<BuildFixture>
 
         // Rebuild — orphan should be cleaned
         BuildResult result2 = _fixture.Build();
-        Assert.True(result2.Success, $"Rebuild after C deletion failed:\n{result2.Stderr}");
+        Assert.True(result2.Success, $"Rebuild after C deletion failed:\n{result2.Output}");
 
         string[] remaining = Directory.GetFiles(_fixture.CObjDir, "cache_test_orphan-*");
         Assert.Empty(remaining);
@@ -256,7 +256,7 @@ public class BuildCacheTests : IClassFixture<BuildFixture>
         using (IDisposable marker = _fixture.InjectMarker(_fixture.AsmFile, "asm"))
         {
             BuildResult result = _fixture.Build();
-            Assert.True(result.Success, $"Build after ASM edit failed:\n{result.Stderr}");
+            Assert.True(result.Success, $"Build after ASM edit failed:\n{result.Output}");
 
             string[] modifiedObjs = Directory.GetFiles(_fixture.AsmObjDir, $"{asmBaseName}-*.obj");
             Assert.NotEmpty(modifiedObjs);
@@ -271,7 +271,7 @@ public class BuildCacheTests : IClassFixture<BuildFixture>
 
         // After revert, rebuild should restore original hash
         BuildResult result2 = _fixture.Build();
-        Assert.True(result2.Success, $"Build after ASM revert failed:\n{result2.Stderr}");
+        Assert.True(result2.Success, $"Build after ASM revert failed:\n{result2.Output}");
 
         string[] revertedObjs = Directory.GetFiles(_fixture.AsmObjDir, $"{asmBaseName}-*.obj");
         Assert.NotEmpty(revertedObjs);
@@ -291,7 +291,7 @@ public class BuildCacheTests : IClassFixture<BuildFixture>
         }
 
         BuildResult result = _fixture.Build();
-        Assert.True(result.Success, $"Clean intermediate build failed:\n{result.Stderr}");
+        Assert.True(result.Success, $"Clean intermediate build failed:\n{result.Output}");
         Assert.True(File.Exists(_fixture.IsoFile), "ISO not produced after clean rebuild");
         Assert.DoesNotContain("cache hit", result.Stdout, StringComparison.OrdinalIgnoreCase);
 
@@ -300,7 +300,7 @@ public class BuildCacheTests : IClassFixture<BuildFixture>
         Thread.Sleep(1100);
 
         BuildResult result2 = _fixture.Build();
-        Assert.True(result2.Success, $"No-change rebuild failed:\n{result2.Stderr}");
+        Assert.True(result2.Success, $"No-change rebuild failed:\n{result2.Output}");
         Assert.Contains("Patcher cache hit", result2.Stdout);
         Assert.Contains("ILC cache hit", result2.Stdout);
         Assert.Equal(elfTs, File.GetLastWriteTimeUtc(_fixture.ElfFile));
