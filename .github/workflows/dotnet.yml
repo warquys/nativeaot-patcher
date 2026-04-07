@@ -152,58 +152,6 @@ jobs:
           name: Cosmos.Build.Asm.Test-Results
           path: ./tests/Cosmos.Tests.Build.Asm/TestResults/Cosmos.Tests.Build.Asm.trx
 
-  unix-iso-tests:
-    name: Run ISO Build Tests - Unix (${{ matrix.arch }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ ubuntu-latest ]
-        dotnet-version: [ 10.0.x ]
-        arch: [ x64, arm64 ]
-        include:
-          - arch: x64
-            rid: linux-x64
-          - arch: arm64
-            rid: linux-arm64
-    steps:
-      - name: 📥 Checkout Code
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: 🛠️ Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ matrix.dotnet-version }}
-
-      - name: 🧹 Clear NuGet cache before building packages
-        run: dotnet nuget locals all --clear
-
-      - name: 🔄 Compile Packages (multi-arch)
-        run: ./.devcontainer/postCreateCommand.sh
-
-      - name: 🔧 Install Build Tools
-        run: cosmos install --auto
-
-      - name: Build ISO for ${{ matrix.arch }}
-        run: |
-          if [ "${{ matrix.arch }}" = "arm64" ]; then
-            ARCH_DEFINE="ARCH_ARM64"
-          else
-            ARCH_DEFINE="ARCH_X64"
-          fi
-          dotnet publish -c Debug -r ${{ matrix.rid }} -p:DefineConstants="$ARCH_DEFINE" -p:CosmosArch=${{ matrix.arch }} --verbosity detailed ./examples/DevKernel/DevKernel.csproj -o ./output-${{ matrix.arch }}
-
-      - name: 🕵️‍♂️ Verify Output
-        run: |
-          [ -f ./output-${{ matrix.arch }}/DevKernel.iso ] && echo "ISO exists for ${{ matrix.arch }}" || (echo "ISO missing for ${{ matrix.arch }}" && exit 1)
-
-      - name: 📤 Upload ISO
-        uses: actions/upload-artifact@v4
-        with:
-          name: DevKernel-ISO-${{ matrix.arch }}-${{ github.job }}-${{ matrix.arch }}-${{ github.run_number }}
-          path: ./output-${{ matrix.arch }}/DevKernel.iso
-
   windows-iso-tests:
     name: Run ISO Build Tests - Windows (${{ matrix.arch }})
     runs-on: ${{ matrix.os }}

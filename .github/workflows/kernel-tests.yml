@@ -38,8 +38,13 @@ permissions:
   pull-requests: write
 
 jobs:
+  # ── Setup ─────────────────────────────────────────────────────────────────────
+  setup:
+    uses: ./.github/workflows/kernel-setup.yml
+
   # ── HelloWorld ────────────────────────────────────────────────────────────────
   helloworld-tests:
+    needs: setup
     uses: ./.github/workflows/kernel-test-run.yml
     with:
       suite_name: HelloWorld
@@ -62,6 +67,7 @@ jobs:
 
   # ── Memory ────────────────────────────────────────────────────────────────────
   memory-tests:
+    needs: setup
     uses: ./.github/workflows/kernel-test-run.yml
     with:
       suite_name: Memory
@@ -84,6 +90,7 @@ jobs:
 
   # ── TypeCasting ───────────────────────────────────────────────────────────────
   typecasting-tests:
+    needs: setup
     uses: ./.github/workflows/kernel-test-run.yml
     with:
       suite_name: TypeCasting
@@ -106,6 +113,7 @@ jobs:
 
   # ── Timer ─────────────────────────────────────────────────────────────────────
   timer-tests:
+    needs: setup
     uses: ./.github/workflows/kernel-test-run.yml
     with:
       suite_name: Timer
@@ -128,6 +136,7 @@ jobs:
 
   # ── Network ───────────────────────────────────────────────────────────────────
   network-tests:
+    needs: setup
     uses: ./.github/workflows/kernel-test-run.yml
     with:
       suite_name: Network
@@ -150,6 +159,7 @@ jobs:
 
   # ── Threading ─────────────────────────────────────────────────────────────────
   threading-tests:
+    needs: setup
     uses: ./.github/workflows/kernel-test-run.yml
     with:
       suite_name: Threading
@@ -172,6 +182,7 @@ jobs:
 
   # ── Graphic ───────────────────────────────────────────────────────────────────
   graphic-tests:
+    needs: setup
     uses: ./.github/workflows/kernel-test-run.yml
     with:
       suite_name: Graphic
@@ -196,7 +207,7 @@ jobs:
   test-summary:
     name: Test Summary
     runs-on: ubuntu-latest
-    needs: [ helloworld-tests, memory-tests, typecasting-tests, timer-tests, network-tests, threading-tests, graphic-tests ]
+    needs: [ helloworld-results, memory-results, typecasting-results, timer-results, network-results, threading-results, graphic-results ]
     if: always()
     steps:
       - name: 📊 Generate Summary

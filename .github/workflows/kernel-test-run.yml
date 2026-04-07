@@ -54,21 +54,31 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-depth: 0
 
       - name: 🛠️ Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ matrix.dotnet-version }}
 
-      - name: 🗑️ Clear NuGet Cache
-        run: dotnet nuget locals all --clear
+      - name: 📥 Download Cosmos Packages
+        uses: actions/download-artifact@v4
+        with:
+          name: cosmos-packages
+          path: artifacts/package/release
 
-      - name: 📦 Build and Install Cosmos Packages (multi-arch)
-        run: ./.devcontainer/postCreateCommand.sh
-        env:
-          DOTNET_CLI_TELEMETRY_OPTOUT: 1
-          DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+      - name: 📦 Configure NuGet Local Source
+        run: |
+          dotnet nuget locals all --clear
+          rm -rf ~/.nuget/packages/cosmos.* 2>/dev/null || true
+          dotnet nuget remove source local-packages 2>/dev/null || true
+          dotnet nuget add source "$PWD/artifacts/package/release" --name local-packages
+
+      - name: 🔧 Install Global Tools
+        run: |
+          dotnet tool uninstall -g Cosmos.Patcher 2>/dev/null || true
+          dotnet tool install -g Cosmos.Patcher --add-source artifacts/package/release
+          dotnet tool uninstall -g Cosmos.Tools 2>/dev/null || true
+          dotnet tool install -g Cosmos.Tools --add-source artifacts/package/release
 
       - name: 🔧 Install Build Tools
         run: cosmos install --auto

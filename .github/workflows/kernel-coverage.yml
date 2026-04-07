@@ -17,9 +17,15 @@ permissions:
   pull-requests: write
 
 jobs:
+  # ── Setup ─────────────────────────────────────────────────────────────────────
+  setup:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-coverage')
+    uses: ./.github/workflows/kernel-setup.yml
+
   # ── HelloWorld ────────────────────────────────────────────────────────────────
   helloworld-tests:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-coverage')
+    needs: setup
+    if: always() && needs.setup.result == 'success'
     uses: ./.github/workflows/kernel-test-run.yml
     with:
       suite_name: HelloWorld
@@ -32,7 +38,8 @@ jobs:
 
   # ── Memory ────────────────────────────────────────────────────────────────────
   memory-tests:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-coverage')
+    needs: setup
+    if: always() && needs.setup.result == 'success'
     uses: ./.github/workflows/kernel-test-run.yml
     with:
       suite_name: Memory
@@ -45,7 +52,8 @@ jobs:
 
   # ── TypeCasting ───────────────────────────────────────────────────────────────
   typecasting-tests:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-coverage')
+    needs: setup
+    if: always() && needs.setup.result == 'success'
     uses: ./.github/workflows/kernel-test-run.yml
     with:
       suite_name: TypeCasting
@@ -58,7 +66,8 @@ jobs:
 
   # ── Timer ─────────────────────────────────────────────────────────────────────
   timer-tests:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-coverage')
+    needs: setup
+    if: always() && needs.setup.result == 'success'
     uses: ./.github/workflows/kernel-test-run.yml
     with:
       suite_name: Timer
@@ -71,7 +80,8 @@ jobs:
 
   # ── Network ───────────────────────────────────────────────────────────────────
   network-tests:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-coverage')
+    needs: setup
+    if: always() && needs.setup.result == 'success'
     uses: ./.github/workflows/kernel-test-run.yml
     with:
       suite_name: Network
@@ -84,7 +94,8 @@ jobs:
 
   # ── Threading ─────────────────────────────────────────────────────────────────
   threading-tests:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-coverage')
+    needs: setup
+    if: always() && needs.setup.result == 'success'
     uses: ./.github/workflows/kernel-test-run.yml
     with:
       suite_name: Threading
@@ -97,7 +108,8 @@ jobs:
 
   # ── Graphic ───────────────────────────────────────────────────────────────────
   graphic-tests:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-coverage')
+    needs: setup
+    if: always() && needs.setup.result == 'success'
     uses: ./.github/workflows/kernel-test-run.yml
     with:
       suite_name: Graphic
