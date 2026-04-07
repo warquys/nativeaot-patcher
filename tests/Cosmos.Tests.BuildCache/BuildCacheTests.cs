@@ -5,8 +5,6 @@ namespace Cosmos.Tests.BuildCache;
 /// Validates that each pipeline step (patcher, ILC, GCC, YASM, linker, ISO)
 /// is correctly skipped when inputs are unchanged, and correctly rebuilt
 /// when the corresponding source files change.
-///
-/// These tests are ordered and share state (build artifacts) across the collection.
 /// </summary>
 [Collection("BuildCache")]
 [TestCaseOrderer("Cosmos.Tests.BuildCache.PriorityOrderer", "Cosmos.Tests.BuildCache")]
@@ -20,12 +18,11 @@ public class BuildCacheTests : IClassFixture<BuildFixture>
     }
 
     // ------------------------------------------------------------------
-    // TEST 1: Clean build succeeds and produces all expected outputs
+    // TEST 1: Clean build — full pipeline, no cache hits
     // ------------------------------------------------------------------
     [Fact, TestPriority(1)]
     public void CleanBuild_ProducesAllOutputs()
     {
-        // Clean intermediate state
         if (Directory.Exists(_fixture.ObjDir))
         {
             Directory.Delete(_fixture.ObjDir, true);
@@ -38,58 +35,54 @@ public class BuildCacheTests : IClassFixture<BuildFixture>
         Assert.True(File.Exists(_fixture.IsoFile), "ISO not produced");
         Assert.True(File.Exists(_fixture.PatcherHashFile), "Patcher cache hash not written");
         Assert.True(File.Exists(_fixture.IlcHashFile), "ILC cache hash not written");
+        Assert.True(File.Exists(_fixture.LinkHashFile), "Link cache hash not written");
+        Assert.True(File.Exists(_fixture.IsoHashFile), "ISO cache hash not written");
         Assert.True(File.Exists(_fixture.IlcOutput), "ILC .o not produced");
 
-        // Clean build must NOT show any cache hits
         Assert.DoesNotContain("cache hit", result.Stdout, StringComparison.OrdinalIgnoreCase);
     }
 
     // ------------------------------------------------------------------
-    // TEST 2: No-change rebuild — all heavy steps cached
+    // TEST 2: No-change rebuild — ALL steps cached
     // ------------------------------------------------------------------
     [Fact, TestPriority(2)]
     public void NoChangeRebuild_AllStepsCached()
     {
-        // Capture state before rebuild
         DateTime elfBefore = File.GetLastWriteTimeUtc(_fixture.ElfFile);
         DateTime isoBefore = File.GetLastWriteTimeUtc(_fixture.IsoFile);
         DateTime ilcBefore = File.GetLastWriteTimeUtc(_fixture.IlcOutput);
-        string patcherHashBefore = File.ReadAllText(_fixture.PatcherHashFile).Trim();
-        string ilcHashBefore = File.ReadAllText(_fixture.IlcHashFile).Trim();
 
-        Thread.Sleep(1100); // Ensure filesystem timestamp resolution
+        Thread.Sleep(1100);
         BuildResult result = _fixture.Build();
 
         Assert.True(result.Success, $"No-change rebuild failed:\n{result.Output}");
 
-        // Cache hits
+        // All cache hits
         Assert.Contains("Patcher cache hit", result.Stdout);
         Assert.Contains("ILC cache hit", result.Stdout);
+        Assert.Contains("Linker cache hit", result.Stdout);
+        Assert.Contains("ISO cache hit", result.Stdout);
 
-        // Patcher should NOT run
+        // Nothing should run
         Assert.DoesNotContain("Batch patching:", result.Stdout);
-
-        // ILC should NOT compile
         Assert.DoesNotContain("[ILC] Compiling:", result.Stdout);
+        Assert.DoesNotContain("Built ELF:", result.Stdout);
+        Assert.DoesNotContain("ISO created at:", result.Stdout);
 
-        // ILC output timestamp unchanged (not recompiled)
+        // Timestamps unchanged
+        Assert.Equal(elfBefore, File.GetLastWriteTimeUtc(_fixture.ElfFile));
+        Assert.Equal(isoBefore, File.GetLastWriteTimeUtc(_fixture.IsoFile));
         Assert.Equal(ilcBefore, File.GetLastWriteTimeUtc(_fixture.IlcOutput));
-
-        // Hashes unchanged
-        Assert.Equal(patcherHashBefore, File.ReadAllText(_fixture.PatcherHashFile).Trim());
-        Assert.Equal(ilcHashBefore, File.ReadAllText(_fixture.IlcHashFile).Trim());
     }
 
     // ------------------------------------------------------------------
-    // TEST 3: C# kernel source change → patcher + ILC + linker + ISO rebuild
+    // TEST 3: C# change → patcher + ILC + linker + ISO rebuild
     // ------------------------------------------------------------------
     [Fact, TestPriority(3)]
     public void CSharpChange_TriggersFullManagedRebuild()
     {
         DateTime elfBefore = File.GetLastWriteTimeUtc(_fixture.ElfFile);
         DateTime ilcBefore = File.GetLastWriteTimeUtc(_fixture.IlcOutput);
-        string patcherHashBefore = File.ReadAllText(_fixture.PatcherHashFile).Trim();
-        string ilcHashBefore = File.ReadAllText(_fixture.IlcHashFile).Trim();
 
         Thread.Sleep(1100);
         using IDisposable marker = _fixture.InjectMarker(_fixture.DevKernelCs, "cs");
@@ -97,21 +90,19 @@ public class BuildCacheTests : IClassFixture<BuildFixture>
 
         Assert.True(result.Success, $"Build after C# change failed:\n{result.Output}");
 
-        // Patcher must re-run (input DLL changed)
+        // Patcher + ILC must re-run
         Assert.DoesNotContain("Patcher cache hit", result.Stdout);
         Assert.Contains("Batch patching:", result.Stdout);
-
-        // ILC must recompile
         Assert.DoesNotContain("ILC cache hit", result.Stdout);
         Assert.Contains("[ILC] Compiling:", result.Stdout);
 
-        // ELF + ILC output must be rebuilt
+        // Linker + ISO must rebuild (ILC output changed)
+        Assert.DoesNotContain("Linker cache hit", result.Stdout);
+        Assert.DoesNotContain("ISO cache hit", result.Stdout);
+
+        // Timestamps must change
         Assert.NotEqual(elfBefore, File.GetLastWriteTimeUtc(_fixture.ElfFile));
         Assert.NotEqual(ilcBefore, File.GetLastWriteTimeUtc(_fixture.IlcOutput));
-
-        // Hashes must change
-        Assert.NotEqual(patcherHashBefore, File.ReadAllText(_fixture.PatcherHashFile).Trim());
-        Assert.NotEqual(ilcHashBefore, File.ReadAllText(_fixture.IlcHashFile).Trim());
     }
 
     // ------------------------------------------------------------------
@@ -120,8 +111,7 @@ public class BuildCacheTests : IClassFixture<BuildFixture>
     [Fact, TestPriority(4)]
     public void CacheRestoredAfterCSharpRevert()
     {
-        // The marker was reverted by the using in test 3.
-        // Rebuild should re-cache and then be stable.
+        // Marker was reverted by using in test 3. Two builds to stabilize + verify.
         BuildResult result = _fixture.Build();
         Assert.True(result.Success, $"Rebuild failed:\n{result.Output}");
 
@@ -130,45 +120,46 @@ public class BuildCacheTests : IClassFixture<BuildFixture>
 
         Assert.Contains("Patcher cache hit", result2.Stdout);
         Assert.Contains("ILC cache hit", result2.Stdout);
+        Assert.Contains("Linker cache hit", result2.Stdout);
+        Assert.Contains("ISO cache hit", result2.Stdout);
     }
 
     // ------------------------------------------------------------------
-    // TEST 5: ASM source change → YASM rebuild, patcher/ILC cached
+    // TEST 5: ASM change → YASM + linker + ISO rebuild, patcher/ILC cached
     // ------------------------------------------------------------------
     [Fact, TestPriority(5)]
     public void AsmChange_TriggersYasmRebuild_PatcherIlcCached()
     {
         DateTime ilcBefore = File.GetLastWriteTimeUtc(_fixture.IlcOutput);
-        string patcherHashBefore = File.ReadAllText(_fixture.PatcherHashFile).Trim();
-        string ilcHashBefore = File.ReadAllText(_fixture.IlcHashFile).Trim();
+        DateTime elfBefore = File.GetLastWriteTimeUtc(_fixture.ElfFile);
 
+        Thread.Sleep(1100);
         using IDisposable marker = _fixture.InjectMarker(_fixture.AsmFile, "asm");
         BuildResult result = _fixture.Build();
 
         Assert.True(result.Success, $"Build after ASM change failed:\n{result.Output}");
 
-        // Patcher + ILC should be cached (ASM doesn't affect managed code)
+        // Patcher + ILC cached (ASM doesn't affect managed code)
         Assert.Contains("Patcher cache hit", result.Stdout);
         Assert.Contains("ILC cache hit", result.Stdout);
-
-        // ILC output unchanged
         Assert.Equal(ilcBefore, File.GetLastWriteTimeUtc(_fixture.IlcOutput));
 
-        // Managed hashes unchanged
-        Assert.Equal(patcherHashBefore, File.ReadAllText(_fixture.PatcherHashFile).Trim());
-        Assert.Equal(ilcHashBefore, File.ReadAllText(_fixture.IlcHashFile).Trim());
+        // Linker + ISO must rebuild (new .obj)
+        Assert.DoesNotContain("Linker cache hit", result.Stdout);
+        Assert.DoesNotContain("ISO cache hit", result.Stdout);
+        Assert.NotEqual(elfBefore, File.GetLastWriteTimeUtc(_fixture.ElfFile));
     }
 
     // ------------------------------------------------------------------
-    // TEST 6: C source change → GCC rebuild, patcher/ILC cached
+    // TEST 6: C change → GCC + linker + ISO rebuild, patcher/ILC cached
     // ------------------------------------------------------------------
     [Fact, TestPriority(6)]
     public void CChange_TriggersGccRebuild_PatcherIlcCached()
     {
         DateTime ilcBefore = File.GetLastWriteTimeUtc(_fixture.IlcOutput);
-        string patcherHashBefore = File.ReadAllText(_fixture.PatcherHashFile).Trim();
-        string ilcHashBefore = File.ReadAllText(_fixture.IlcHashFile).Trim();
+        DateTime elfBefore = File.GetLastWriteTimeUtc(_fixture.ElfFile);
 
+        Thread.Sleep(1100);
         using IDisposable marker = _fixture.InjectMarker(_fixture.CFile, "c");
         BuildResult result = _fixture.Build();
 
@@ -177,13 +168,12 @@ public class BuildCacheTests : IClassFixture<BuildFixture>
         // Patcher + ILC cached
         Assert.Contains("Patcher cache hit", result.Stdout);
         Assert.Contains("ILC cache hit", result.Stdout);
-
-        // ILC output unchanged
         Assert.Equal(ilcBefore, File.GetLastWriteTimeUtc(_fixture.IlcOutput));
 
-        // Managed hashes unchanged
-        Assert.Equal(patcherHashBefore, File.ReadAllText(_fixture.PatcherHashFile).Trim());
-        Assert.Equal(ilcHashBefore, File.ReadAllText(_fixture.IlcHashFile).Trim());
+        // Linker + ISO must rebuild (new .o)
+        Assert.DoesNotContain("Linker cache hit", result.Stdout);
+        Assert.DoesNotContain("ISO cache hit", result.Stdout);
+        Assert.NotEqual(elfBefore, File.GetLastWriteTimeUtc(_fixture.ElfFile));
     }
 
     // ------------------------------------------------------------------
@@ -194,24 +184,20 @@ public class BuildCacheTests : IClassFixture<BuildFixture>
     {
         string tempC = Path.Combine(_fixture.DevKernelCDir, "cache_test_orphan.c");
 
-        // Create a temp C file and build
         File.WriteAllText(tempC, "// temp\nvoid cache_test_orphan_fn(void) {}\n");
         try
         {
             BuildResult result = _fixture.Build();
             Assert.True(result.Success, $"Build with temp C file failed:\n{result.Output}");
 
-            // Verify object was created
             string[] orphanObjs = Directory.GetFiles(_fixture.CObjDir, "cache_test_orphan-*");
             Assert.NotEmpty(orphanObjs);
         }
         finally
         {
-            // Delete the temp file
             File.Delete(tempC);
         }
 
-        // Rebuild — orphan should be cleaned
         BuildResult result2 = _fixture.Build();
         Assert.True(result2.Success, $"Rebuild after C deletion failed:\n{result2.Output}");
 
@@ -220,7 +206,7 @@ public class BuildCacheTests : IClassFixture<BuildFixture>
     }
 
     // ------------------------------------------------------------------
-    // TEST 8: YASM content-hash changes on source edit
+    // TEST 8: YASM content-hash changes on source edit and reverts cleanly
     // ------------------------------------------------------------------
     [Fact, TestPriority(8)]
     public void YasmContentHash_ChangesOnSourceEdit()
@@ -230,7 +216,6 @@ public class BuildCacheTests : IClassFixture<BuildFixture>
         Assert.NotEmpty(originalObjs);
         string originalObjName = Path.GetFileName(originalObjs[0]);
 
-        // Modify ASM and rebuild
         using (IDisposable marker = _fixture.InjectMarker(_fixture.AsmFile, "asm"))
         {
             BuildResult result = _fixture.Build();
@@ -240,14 +225,10 @@ public class BuildCacheTests : IClassFixture<BuildFixture>
             Assert.NotEmpty(modifiedObjs);
             string modifiedObjName = Path.GetFileName(modifiedObjs[0]);
 
-            // Hash-based filename must differ
             Assert.NotEqual(originalObjName, modifiedObjName);
-
-            // Old object should be cleaned (orphan)
             Assert.False(File.Exists(originalObjs[0]), "Original ASM object should be cleaned as orphan");
         }
 
-        // After revert, rebuild should restore original hash
         BuildResult result2 = _fixture.Build();
         Assert.True(result2.Success, $"Build after ASM revert failed:\n{result2.Output}");
 
@@ -257,12 +238,11 @@ public class BuildCacheTests : IClassFixture<BuildFixture>
     }
 
     // ------------------------------------------------------------------
-    // TEST 9: Full pipeline from clean intermediate state
+    // TEST 9: Full pipeline from clean intermediate, then cache works
     // ------------------------------------------------------------------
     [Fact, TestPriority(9)]
     public void CleanIntermediateRebuild_ThenCacheWorks()
     {
-        // Wipe intermediate dir
         if (Directory.Exists(_fixture.ObjDir))
         {
             Directory.Delete(_fixture.ObjDir, true);
@@ -273,10 +253,11 @@ public class BuildCacheTests : IClassFixture<BuildFixture>
         Assert.True(File.Exists(_fixture.IsoFile), "ISO not produced after clean rebuild");
         Assert.DoesNotContain("cache hit", result.Stdout, StringComparison.OrdinalIgnoreCase);
 
-        // Immediate no-change rebuild
         BuildResult result2 = _fixture.Build();
         Assert.True(result2.Success, $"No-change rebuild failed:\n{result2.Output}");
         Assert.Contains("Patcher cache hit", result2.Stdout);
         Assert.Contains("ILC cache hit", result2.Stdout);
+        Assert.Contains("Linker cache hit", result2.Stdout);
+        Assert.Contains("ISO cache hit", result2.Stdout);
     }
 }

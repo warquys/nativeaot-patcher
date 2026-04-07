@@ -19,6 +19,8 @@ public class BuildFixture
     public string IsoFile { get; }
     public string PatcherHashFile { get; }
     public string IlcHashFile { get; }
+    public string LinkHashFile { get; }
+    public string IsoHashFile { get; }
     public string IlcOutput { get; }
     public string AsmObjDir { get; }
     public string CObjDir { get; }
@@ -45,6 +47,8 @@ public class BuildFixture
         IsoFile = Path.Combine(binBase, "cosmos", "DevKernel.iso");
         PatcherHashFile = Path.Combine(objBase, "cosmos", ".patcher-hash");
         IlcHashFile = Path.Combine(objBase, "cosmos", "native", ".ilc-hash");
+        LinkHashFile = Path.Combine(objBase, "cosmos", ".link-hash");
+        IsoHashFile = Path.Combine(objBase, "cosmos", ".iso-hash");
         IlcOutput = Path.Combine(objBase, "cosmos", "native", "DevKernel.o");
         AsmObjDir = Path.Combine(objBase, "cosmos", "asm");
         CObjDir = Path.Combine(objBase, "cosmos", "cobj");

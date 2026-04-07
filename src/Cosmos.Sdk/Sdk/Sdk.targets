@@ -209,10 +209,11 @@ public static class CosmosEntryPoint
       <CleanedVersionScriptLines Include="@(RawVersionScriptLines)"  Condition="$([System.String]::new('%(RawVersionScriptLines.Identity)').Trim().Equals($(__Semicolon)).ToString()) == 'False'" />
     </ItemGroup>
 
-    <!-- Override file with Cleaned Lines -->
+    <!-- Only rewrite if semicolons were actually removed (preserves timestamp for incremental builds) -->
     <WriteLinesToFile
       File="$(ExportsFile)"
       Lines="@(CleanedVersionScriptLines)"
-      Overwrite="true" />
+      Overwrite="true"
+      Condition="@(RawVersionScriptLines->Count()) != @(CleanedVersionScriptLines->Count())" />
   </Target>
 </Project>
