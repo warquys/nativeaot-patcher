@@ -10,6 +10,8 @@
     <PackageVersion Include="Cosmos.Build.GCC" Version="3.0.43" />
     <PackageVersion Include="Cosmos.Build.Ilc" Version="3.0.43" />
     <PackageVersion Include="Cosmos.Build.Patcher" Version="3.0.43" />
+    <PackageVersion Include="Cosmos.Kernel" Version="3.0.43" />
+    <PackageVersion Include="Cosmos.Kernel.System" Version="3.0.43" />
     <PackageVersion Include="Cosmos.Kernel.Native.x64" Version="3.0.43" />
     <PackageVersion Include="Cosmos.Kernel.Native.ARM64" Version="3.0.43" />
     <PackageVersion Include="Cosmos.Kernel.Native.MultiArch" Version="3.0.43" />
