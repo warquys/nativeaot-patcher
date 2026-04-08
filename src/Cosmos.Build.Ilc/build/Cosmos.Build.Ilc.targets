@@ -126,8 +126,11 @@
     <WriteLinesToFile File="%(ManagedBinary.RspFile)" Lines="@(IlcArg)" Overwrite="true"/>
   </Target>
 
-  <!-- Content-hash based ILC caching: hash all input DLLs + ref DLLs -->
-  <Target Name="CheckIlcCache" AfterTargets="WriteIlcRsp" BeforeTargets="CompileWithIlc">
+  <!-- Content-hash based ILC caching: hash all input DLLs + ref DLLs.
+       Wired in via CompileWithIlc.DependsOnTargets so the target-level Condition
+       below sees the freshly computed _IlcCacheHit. (BeforeTargets does not
+       synchronize with target Condition evaluation; DependsOnTargets does.) -->
+  <Target Name="CheckIlcCache">
     <PropertyGroup>
       <_IlcCacheFile>$(IlcIntermediateOutputPath).ilc-hash</_IlcCacheFile>
       <_IlcOutputFile>$([MSBuild]::NormalizePath('$(IlcIntermediateOutputPath)$(AssemblyName).o'))</_IlcOutputFile>
@@ -152,7 +155,7 @@
 
   <Target Name="CompileWithIlc"
           AfterTargets="Build"
-          DependsOnTargets="WriteIlcRsp;ResolveIlcToolsPath"
+          DependsOnTargets="WriteIlcRsp;ResolveIlcToolsPath;CheckIlcCache"
           Condition="'$(_IlcCacheHit)' != 'true'">
     <Message Importance="High" Text="[ILC] Compiling: %(ManagedBinary.Identity) with RSP: %(ManagedBinary.RspFile)"/>
     <Exec
