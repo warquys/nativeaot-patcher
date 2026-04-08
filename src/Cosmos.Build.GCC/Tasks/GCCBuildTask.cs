@@ -9,9 +9,8 @@ namespace Cosmos.Build.GCC.Tasks;
 public sealed class GCCBuildTask : ToolTask
 {
     [Required] public string? GCCPath { get; set; }
-    [Required] public string? SourceFiles { get; set; }
+    [Required] public string[]? SourceFiles { get; set; }
     [Required] public string? OutputPath { get; set; }
-    [Required] public string? OutputFile { get; set; }
 
     // Optional additional compiler flags
     public string? CompilerFlags { get; set; }
@@ -21,36 +20,15 @@ public sealed class GCCBuildTask : ToolTask
 
     protected override MessageImportance StandardErrorLoggingImportance => MessageImportance.Normal;
 
-    protected override string GenerateFullPathToTool() =>
-            GCCPath!; protected override string GenerateCommandLineCommands()
-    {
-        var sb = new StringBuilder();
+    protected override string GenerateFullPathToTool() => GCCPath!;
 
-        // Compile to object file, not a shared library
-        sb.Append(" -c ");
+    protected override string GenerateCommandLineCommands() => string.Empty;
 
-        // Add output flag
-        sb.Append($" -o {Path.Combine(OutputPath!, OutputFile)} ");
-
-        // Add any user-provided compiler flags
-        if (!string.IsNullOrEmpty(CompilerFlags))
-        {
-            sb.Append($" {CompilerFlags} ");
-        }
-
-        // Include all source files
-        string[] sourceFilePaths = Directory.GetFiles(SourceFiles!, "*.c", SearchOption.TopDirectoryOnly);
-        sb.Append(string.Join(" ", sourceFilePaths));
-
-        return sb.ToString();
-    }
     public override bool Execute()
     {
         Log.LogMessage(MessageImportance.High, "Running Cosmos.GCC Build Task...");
         Log.LogMessage(MessageImportance.High, $"Tool Path: {GCCPath}");
-        Log.LogMessage(MessageImportance.High, $"Source Directory: {SourceFiles}");
         Log.LogMessage(MessageImportance.High, $"Output Path: {OutputPath}");
-        Log.LogMessage(MessageImportance.High, $"Output File: {OutputFile}");
 
         if (!Directory.Exists(OutputPath))
         {
@@ -58,21 +36,13 @@ public sealed class GCCBuildTask : ToolTask
             Directory.CreateDirectory(OutputPath!);
         }
 
-        // Check if source directory exists and contains C files
-        if (!Directory.Exists(SourceFiles))
+        if (SourceFiles == null || SourceFiles.Length == 0)
         {
-            Log.LogError($"Source directory {SourceFiles} does not exist");
-            return false;
+            Log.LogMessage(MessageImportance.Normal, "No C source files to compile.");
+            return true;
         }
 
-        string[] sourceFilePaths = Directory.GetFiles(SourceFiles!, "*.c", SearchOption.TopDirectoryOnly);
-        if (sourceFilePaths.Length == 0)
-        {
-            Log.LogWarning($"No C files found in directory {SourceFiles}");
-            return true; // Not an error, just nothing to compile
-        }
-
-        Log.LogMessage(MessageImportance.Normal, $"Found {sourceFilePaths.Length} C files to compile");
+        Log.LogMessage(MessageImportance.Normal, $"Found {SourceFiles.Length} C files to compile");
 
         // Get GCC's freestanding include directory
         string? gccIncludePath = GetGCCIncludePath();
@@ -95,17 +65,16 @@ public sealed class GCCBuildTask : ToolTask
         using SHA1? hasher = SHA1.Create();
         var validOutputFiles = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (string file in sourceFilePaths)
+        string objExt = Path.DirectorySeparatorChar == '\\' ? ".obj" : ".o";
+
+        foreach (string file in SourceFiles)
         {
             // Compute hash of file contents for a deterministic output filename
             using FileStream stream = File.OpenRead(file);
             byte[] fileHash = hasher.ComputeHash(stream);
             string fileHashString = BitConverter.ToString(fileHash).Replace("-", "").ToLower();
 
-            // Set file-specific output name
             string baseName = Path.GetFileNameWithoutExtension(file);
-            // Produce Windows-friendly .obj extension so the linker (which currently searches for *.obj) can pick them up
-            string objExt = Path.DirectorySeparatorChar == '\\' ? ".obj" : ".o";
             string outputName = $"{baseName}-{fileHashString.Substring(0, 8)}{objExt}";
             string outputPath = Path.GetFullPath(Path.Combine(OutputPath!, outputName));
 
@@ -120,27 +89,24 @@ public sealed class GCCBuildTask : ToolTask
 
             // Build and execute the command for this file
             StringBuilder sb = new();
-            sb.Append(" -c ");  // Compile to object file
+            sb.Append(" -c ");
             sb.Append($" -o {outputPath} ");
 
-            // Add any user-provided compiler flags
             if (!string.IsNullOrEmpty(CompilerFlags))
             {
                 sb.Append($" {CompilerFlags} ");
             }
 
-            // Add GCC's freestanding include directory for standard headers (stdint.h, stddef.h, etc.)
             if (gccIncludePath != null)
             {
                 sb.Append($" -I{gccIncludePath} ");
             }
 
-            // Add source directory as include path for local header files
-            sb.Append($" -I{SourceFiles} ");
+            // Per-file include path: the directory containing this source file
+            string fileDir = Path.GetDirectoryName(file)!;
+            sb.Append($" -I{fileDir} ");
 
-            // Add the source file
             sb.Append($" {file} ");
-            // Execute GCC for this file
             string commandLineArguments = sb.ToString();
             Log.LogMessage(MessageImportance.Normal, $"Compiling {file} with args: {commandLineArguments}");
 
@@ -152,36 +118,16 @@ public sealed class GCCBuildTask : ToolTask
             }
         }
 
-        // Remove orphan object files from THIS source directory only.
-        // Multiple GCCBuildTask invocations share cobj/, so we use a per-invocation manifest
-        // file (.gcc-manifest-<sourceDirHash>) to track which outputs belong to this source dir.
-        // On each run, anything in the previous manifest that's no longer valid is deleted.
-        string sourceDirHashStr;
-        using (SHA1 dirHasher = SHA1.Create())
+        // Remove orphan object files (from renamed/deleted source files)
+        foreach (string existing in Directory.GetFiles(OutputPath!, "*" + objExt))
         {
-            byte[] dirHashBytes = dirHasher.ComputeHash(System.Text.Encoding.UTF8.GetBytes(Path.GetFullPath(SourceFiles!)));
-            sourceDirHashStr = BitConverter.ToString(dirHashBytes).Replace("-", "").ToLower().Substring(0, 12);
-        }
-        string manifestPath = Path.Combine(OutputPath!, $".gcc-manifest-{sourceDirHashStr}");
-
-        // Read previous manifest to find files this invocation owned previously
-        if (File.Exists(manifestPath))
-        {
-            foreach (string previousFile in File.ReadAllLines(manifestPath))
+            string normalizedExisting = Path.GetFullPath(existing);
+            if (!validOutputFiles.Contains(normalizedExisting))
             {
-                if (string.IsNullOrWhiteSpace(previousFile))
-                    continue;
-                string normalizedPrev = Path.GetFullPath(previousFile);
-                if (!validOutputFiles.Contains(normalizedPrev) && File.Exists(normalizedPrev))
-                {
-                    Log.LogMessage(MessageImportance.Normal, $"Removing orphan object: {Path.GetFileName(normalizedPrev)}");
-                    File.Delete(normalizedPrev);
-                }
+                Log.LogMessage(MessageImportance.Normal, $"Removing orphan object: {Path.GetFileName(existing)}");
+                File.Delete(existing);
             }
         }
-
-        // Write current manifest
-        File.WriteAllLines(manifestPath, validOutputFiles);
 
         Log.LogMessage(MessageImportance.High, "GCCBuildTask completed successfully.");
         return true;

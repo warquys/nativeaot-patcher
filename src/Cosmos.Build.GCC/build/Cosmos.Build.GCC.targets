@@ -48,10 +48,17 @@
     <!-- Create output directory if needed (orphan cleanup is handled by GCCBuildTask) -->
     <MakeDir Directories="$(GCCOutputPath)" Condition="!Exists('$(GCCOutputPath)')" />
 
-    <!-- Process each GCC project directory separately -->
-    <Message
-      Text="⚙️  [GCC] Processing C project: %(GCCProject.Identity)"
-      Importance="High" />
+    <!-- Flatten all GCCProject directories into a single .c file list, mirroring how
+         BuildYasm collects @(AsmFiles) from @(AsmSearchPath). This lets us call
+         GCCBuildTask exactly once with all sources, so the orphan cleanup is simple. -->
+    <PropertyGroup>
+      <GCCSourcePattern>@(GCCProject->'%(FullPath)/*.c')</GCCSourcePattern>
+    </PropertyGroup>
+    <ItemGroup>
+      <CSourceFiles Include="$(GCCSourcePattern)" />
+    </ItemGroup>
+
+    <Message Text="⚙️  [GCC] C source files: @(CSourceFiles->Count())" Importance="High" />
 
     <!-- Strip clang-style target flags (space or equals) to keep GCC happy on macOS cross builds -->
     <PropertyGroup>
@@ -59,12 +66,11 @@
       <SanitizedGCCCompilerFlags Condition="'$(SanitizedGCCCompilerFlags)' == ''">$(GCCCompilerFlags)</SanitizedGCCCompilerFlags>
     </PropertyGroup>
 
-    <!-- Compile each project to multiple object files -->
+    <!-- Single invocation with all C files -->
     <GCCBuildTask
       GCCPath="$(GCCPath)"
-      SourceFiles="%(GCCProject.Identity)"
+      SourceFiles="@(CSourceFiles)"
       OutputPath="$(GCCOutputPath)"
-      OutputFile="dummy.o"
       CompilerFlags="$(SanitizedGCCCompilerFlags)" />
 
     <Message Text="✅ [GCC] C files compiled to object files in: $(GCCOutputPath)" Importance="High" />
