@@ -9,9 +9,8 @@ namespace Cosmos.Build.GCC.Tasks;
 public sealed class GCCBuildTask : ToolTask
 {
     [Required] public string? GCCPath { get; set; }
-    [Required] public string? SourceFiles { get; set; }
+    [Required] public string[]? SourceFiles { get; set; }
     [Required] public string? OutputPath { get; set; }
-    [Required] public string? OutputFile { get; set; }
 
     // Optional additional compiler flags
     public string? CompilerFlags { get; set; }
@@ -21,36 +20,15 @@ public sealed class GCCBuildTask : ToolTask
 
     protected override MessageImportance StandardErrorLoggingImportance => MessageImportance.Normal;
 
-    protected override string GenerateFullPathToTool() =>
-            GCCPath!; protected override string GenerateCommandLineCommands()
-    {
-        var sb = new StringBuilder();
+    protected override string GenerateFullPathToTool() => GCCPath!;
 
-        // Compile to object file, not a shared library
-        sb.Append(" -c ");
+    protected override string GenerateCommandLineCommands() => string.Empty;
 
-        // Add output flag
-        sb.Append($" -o {Path.Combine(OutputPath!, OutputFile)} ");
-
-        // Add any user-provided compiler flags
-        if (!string.IsNullOrEmpty(CompilerFlags))
-        {
-            sb.Append($" {CompilerFlags} ");
-        }
-
-        // Include all source files
-        string[] sourceFilePaths = Directory.GetFiles(SourceFiles!, "*.c", SearchOption.TopDirectoryOnly);
-        sb.Append(string.Join(" ", sourceFilePaths));
-
-        return sb.ToString();
-    }
     public override bool Execute()
     {
         Log.LogMessage(MessageImportance.High, "Running Cosmos.GCC Build Task...");
         Log.LogMessage(MessageImportance.High, $"Tool Path: {GCCPath}");
-        Log.LogMessage(MessageImportance.High, $"Source Directory: {SourceFiles}");
         Log.LogMessage(MessageImportance.High, $"Output Path: {OutputPath}");
-        Log.LogMessage(MessageImportance.High, $"Output File: {OutputFile}");
 
         if (!Directory.Exists(OutputPath))
         {
@@ -58,21 +36,13 @@ public sealed class GCCBuildTask : ToolTask
             Directory.CreateDirectory(OutputPath!);
         }
 
-        // Check if source directory exists and contains C files
-        if (!Directory.Exists(SourceFiles))
+        if (SourceFiles == null || SourceFiles.Length == 0)
         {
-            Log.LogError($"Source directory {SourceFiles} does not exist");
-            return false;
+            Log.LogMessage(MessageImportance.Normal, "No C source files to compile.");
+            return true;
         }
 
-        string[] sourceFilePaths = Directory.GetFiles(SourceFiles!, "*.c", SearchOption.TopDirectoryOnly);
-        if (sourceFilePaths.Length == 0)
-        {
-            Log.LogWarning($"No C files found in directory {SourceFiles}");
-            return true; // Not an error, just nothing to compile
-        }
-
-        Log.LogMessage(MessageImportance.Normal, $"Found {sourceFilePaths.Length} C files to compile");
+        Log.LogMessage(MessageImportance.Normal, $"Found {SourceFiles.Length} C files to compile");
 
         // Get GCC's freestanding include directory
         string? gccIncludePath = GetGCCIncludePath();
@@ -81,26 +51,49 @@ public sealed class GCCBuildTask : ToolTask
             Log.LogMessage(MessageImportance.Normal, $"Using GCC include path: {gccIncludePath}");
         }
 
-        // Execute the GCC command for each C file
-        using SHA1? hasher = SHA1.Create();
+        // Validate GCC path exists (once, before the loop)
+        string toolPath = GenerateFullPathToTool().Trim();
+        GCCPath = toolPath; // normalize for downstream checks
 
-        foreach (string file in sourceFilePaths)
+        if (!File.Exists(toolPath) && !TestGCCInPath())
+        {
+            Log.LogError($"GCC not found at {toolPath}. Ensure the cross-compiler is installed and on PATH.");
+            return false;
+        }
+
+        // Execute the GCC command for each C file (with incremental support via content-hash filenames)
+        using SHA1? hasher = SHA1.Create();
+        var validOutputFiles = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // Produce Windows-friendly .obj extension so the linker (which currently searches for *.obj) can pick them up
+        string objExt = Path.DirectorySeparatorChar == '\\' ? ".obj" : ".o";
+
+        foreach (string file in SourceFiles)
         {
             // Compute hash of file contents for a deterministic output filename
             using FileStream stream = File.OpenRead(file);
             byte[] fileHash = hasher.ComputeHash(stream);
             string fileHashString = BitConverter.ToString(fileHash).Replace("-", "").ToLower();
 
-            // Set file-specific output name
+            // Set file-specific output name (full SHA1 hex — matches YasmBuildTask's filename convention)
             string baseName = Path.GetFileNameWithoutExtension(file);
-            // Produce Windows-friendly .obj extension so the linker (which currently searches for *.obj) can pick them up
-            string objExt = Path.DirectorySeparatorChar == '\\' ? ".obj" : ".o";
-            string outputName = $"{baseName}-{fileHashString.Substring(0, 8)}{objExt}";
-            string outputPath = Path.Combine(OutputPath!, outputName);
+            string outputName = $"{baseName}-{fileHashString}{objExt}";
+            string outputPath = Path.GetFullPath(Path.Combine(OutputPath!, outputName));
+
+            validOutputFiles.Add(outputPath);
+
+            // Skip if output already exists (content-hash filename = up-to-date)
+            if (File.Exists(outputPath))
+            {
+                Log.LogMessage(MessageImportance.Normal, $"Skipping {file} (up to date: {outputName})");
+                continue;
+            }
 
             // Build and execute the command for this file
             StringBuilder sb = new();
-            sb.Append(" -c ");  // Compile to object file
+            // Compile to object file, not a shared library
+            sb.Append(" -c ");
+            // Add output flag
             sb.Append($" -o {outputPath} ");
 
             // Add any user-provided compiler flags
@@ -115,24 +108,15 @@ public sealed class GCCBuildTask : ToolTask
                 sb.Append($" -I{gccIncludePath} ");
             }
 
-            // Add source directory as include path for local header files
-            sb.Append($" -I{SourceFiles} ");
+            // Per-file include path: the directory containing this source file
+            string fileDir = Path.GetDirectoryName(file)!;
+            sb.Append($" -I{fileDir} ");
 
             // Add the source file
             sb.Append($" {file} ");
             // Execute GCC for this file
             string commandLineArguments = sb.ToString();
             Log.LogMessage(MessageImportance.Normal, $"Compiling {file} with args: {commandLineArguments}");
-
-            // Validate GCC path exists
-            string toolPath = GenerateFullPathToTool().Trim();
-            GCCPath = toolPath; // normalize for downstream checks
-
-            if (!File.Exists(toolPath) && !TestGCCInPath())
-            {
-                Log.LogError($"GCC not found at {toolPath}. Ensure the cross-compiler is installed and on PATH.");
-                return false;
-            }
 
             if (!ExecuteCommand(toolPath, commandLineArguments))
             {
@@ -142,7 +126,18 @@ public sealed class GCCBuildTask : ToolTask
             }
         }
 
-        Log.LogMessage(MessageImportance.High, "✅ GCCBuildTask completed successfully.");
+        // Remove orphan object files (from renamed/deleted source files)
+        foreach (string existing in Directory.GetFiles(OutputPath!, "*" + objExt))
+        {
+            string normalizedExisting = Path.GetFullPath(existing);
+            if (!validOutputFiles.Contains(normalizedExisting))
+            {
+                Log.LogMessage(MessageImportance.Normal, $"Removing orphan object: {Path.GetFileName(existing)}");
+                File.Delete(existing);
+            }
+        }
+
+        Log.LogMessage(MessageImportance.High, "GCCBuildTask completed successfully.");
         return true;
     }
 

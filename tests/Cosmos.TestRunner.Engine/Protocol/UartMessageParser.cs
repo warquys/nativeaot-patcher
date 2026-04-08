@@ -129,6 +129,11 @@ public class UartMessageParser
                 ParseCoverageData(payload, results);
                 return true;
 
+            case Ds2Vs.ArchitectureInfo:
+                // Architecture bootstrap message (arch + cpu count).
+                // Not used for test assertions, but must be consumed as a valid frame.
+                return true;
+
             default:
                 return false;
         }

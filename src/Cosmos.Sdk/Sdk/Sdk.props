@@ -118,14 +118,18 @@
     <AutoInitializedAssemblies Include="Cosmos.Kernel" />
   </ItemGroup>
 
-  <!-- Build tools (with versions for non-CPM consumers, CPM projects get versions from Directory.Packages.props) -->
+  <!-- Build tools.
+       Non-CPM consumers get the literal version that was substituted at pack time
+       of Cosmos.Sdk (see Cosmos.Sdk.csproj). CPM consumers must declare versions
+       in their own Directory.Packages.props (NuGet forbids Version on PackageReference
+       under central package management). -->
   <ItemGroup Condition="'$(ManagePackageVersionsCentrally)' != 'true'">
-    <PackageReference Include="Cosmos.Build.Analyzer.Patcher" Version="3.0.42" />
-    <PackageReference Include="Cosmos.Build.Common" Version="3.0.42" />
-    <PackageReference Include="Cosmos.Build.Ilc" Version="3.0.42" />
-    <PackageReference Include="Cosmos.Build.Asm" Version="3.0.42" />
-    <PackageReference Include="Cosmos.Build.Patcher" Version="3.0.42" />
-    <PackageReference Include="Cosmos.Build.GCC" Version="3.0.42" />
+    <PackageReference Include="Cosmos.Build.Analyzer.Patcher" Version="@CosmosPackageVersion@" />
+    <PackageReference Include="Cosmos.Build.Common" Version="@CosmosPackageVersion@" />
+    <PackageReference Include="Cosmos.Build.Ilc" Version="@CosmosPackageVersion@" />
+    <PackageReference Include="Cosmos.Build.Asm" Version="@CosmosPackageVersion@" />
+    <PackageReference Include="Cosmos.Build.Patcher" Version="@CosmosPackageVersion@" />
+    <PackageReference Include="Cosmos.Build.GCC" Version="@CosmosPackageVersion@" />
   </ItemGroup>
   <ItemGroup Condition="'$(ManagePackageVersionsCentrally)' == 'true'">
     <PackageReference Include="Cosmos.Build.Analyzer.Patcher" />
@@ -138,11 +142,11 @@
 
   <!-- Both arch packages installed; RuntimeIdentifier selects at build time -->
   <ItemGroup Condition="'$(ManagePackageVersionsCentrally)' != 'true'">
-    <PackageReference Include="Cosmos.Kernel.Native.X64" Version="3.0.42" />
-    <PackageReference Include="Cosmos.Kernel.Native.ARM64" Version="3.0.42" />
-    <PackageReference Include="Cosmos.Kernel.Native.MultiArch" Version="3.0.42" />
-    <PackageReference Include="Cosmos.Kernel.HAL.X64" Version="3.0.42" />
-    <PackageReference Include="Cosmos.Kernel.HAL.ARM64" Version="3.0.42" />
+    <PackageReference Include="Cosmos.Kernel.Native.X64" Version="@CosmosPackageVersion@" />
+    <PackageReference Include="Cosmos.Kernel.Native.ARM64" Version="@CosmosPackageVersion@" />
+    <PackageReference Include="Cosmos.Kernel.Native.MultiArch" Version="@CosmosPackageVersion@" />
+    <PackageReference Include="Cosmos.Kernel.HAL.X64" Version="@CosmosPackageVersion@" />
+    <PackageReference Include="Cosmos.Kernel.HAL.ARM64" Version="@CosmosPackageVersion@" />
   </ItemGroup>
   <ItemGroup Condition="'$(ManagePackageVersionsCentrally)' == 'true'">
     <PackageReference Include="Cosmos.Kernel.Native.X64" />
