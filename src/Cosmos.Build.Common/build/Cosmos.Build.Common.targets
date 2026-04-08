@@ -54,10 +54,12 @@
              Text="Linker cache hit — skipping link (hash: $(_CurrentLinkHash))" />
   </Target>
 
-  <Target Name="LinkTarget"
-          DependsOnTargets="CheckLinkCache"
-          AfterTargets="Build"
-          Condition="'$(_LinkCacheHit)' != 'true'">
+  <!-- Wrapper: runs CheckLinkCache, then conditionally invokes the link work via CallTarget. -->
+  <Target Name="LinkTarget" DependsOnTargets="CheckLinkCache" AfterTargets="Build">
+    <CallTarget Targets="_LinkTargetCore" Condition="'$(_LinkCacheHit)' != 'true'" />
+  </Target>
+
+  <Target Name="_LinkTargetCore">
     <ItemGroup>
       <ObjFiles Include="$(AsmObjDir)/*.obj"/>
       <ObjFiles Include="$(CObjDir)/*.obj"/>
@@ -91,7 +93,6 @@
     <Exec Command="&quot;$(LdLinkerPath)&quot; @(LinkerArgs, ' ')"/>
     <Message Text="Built ELF: $(AssemblyName).elf" Importance="High"/>
 
-    <!-- Write cache hash after successful linking -->
     <WriteLinesToFile File="$(_LinkCacheFile)" Lines="$(_CurrentLinkHash)" Overwrite="true" />
   </Target>
 
@@ -124,13 +125,14 @@
              Text="ISO cache hit — skipping ISO creation (hash: $(_CurrentIsoHash))" />
   </Target>
 
-  <Target Name="BuildISO"
-          DependsOnTargets="CheckIsoCache"
-          AfterTargets="LinkTarget"
-          Condition="'$(_IsoCacheHit)' != 'true'">
+  <!-- Wrapper: runs CheckIsoCache, then conditionally invokes the ISO work via CallTarget. -->
+  <Target Name="BuildISO" DependsOnTargets="CheckIsoCache" AfterTargets="LinkTarget">
+    <CallTarget Targets="_BuildIsoCore" Condition="'$(_IsoCacheHit)' != 'true'" />
+  </Target>
+
+  <Target Name="_BuildIsoCore">
     <Message Text="Creating ISO image with Limine..." Importance="High"/>
 
-    <!-- Remove old ISO directory if it exists -->
     <RemoveDir Directories="$(IsoRoot)"/>
 
     <!-- Limine bootloader files bundled in the NuGet package (tools/Limine/) -->
@@ -182,7 +184,6 @@
     <Exec Command="&quot;$(LimineBinary)&quot; bios-install &quot;$(IsoOutput)&quot;"/>
     <Message Text="ISO created at: $(IsoOutput)" Importance="High"/>
 
-    <!-- Write cache hash after successful ISO creation -->
     <WriteLinesToFile File="$(_IsoCacheFile)" Lines="$(_CurrentIsoHash)" Overwrite="true" />
   </Target>
 

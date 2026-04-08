@@ -126,10 +126,7 @@
     <WriteLinesToFile File="%(ManagedBinary.RspFile)" Lines="@(IlcArg)" Overwrite="true"/>
   </Target>
 
-  <!-- Content-hash based ILC caching: hash all input DLLs + ref DLLs.
-       Wired in via CompileWithIlc.DependsOnTargets so the target-level Condition
-       below sees the freshly computed _IlcCacheHit. (BeforeTargets does not
-       synchronize with target Condition evaluation; DependsOnTargets does.) -->
+  <!-- Content-hash based ILC caching: hash all input DLLs + ref DLLs, set _IlcCacheHit. -->
   <Target Name="CheckIlcCache">
     <PropertyGroup>
       <_IlcCacheFile>$(IlcIntermediateOutputPath).ilc-hash</_IlcCacheFile>
@@ -153,10 +150,17 @@
              Text="ILC cache hit — skipping compilation (hash: $(_CurrentIlcHash))" />
   </Target>
 
+  <!-- Wrapper: always runs dependencies (which set _IlcCacheHit), then conditionally invokes
+       the core via CallTarget. CallTarget is a task, so its Condition is evaluated at execution
+       time (after dependencies have run) — unlike a target-level Condition, which MSBuild
+       evaluates at dependency-resolution time before the dependencies run. -->
   <Target Name="CompileWithIlc"
           AfterTargets="Build"
-          DependsOnTargets="WriteIlcRsp;ResolveIlcToolsPath;CheckIlcCache"
-          Condition="'$(_IlcCacheHit)' != 'true'">
+          DependsOnTargets="WriteIlcRsp;ResolveIlcToolsPath;CheckIlcCache">
+    <CallTarget Targets="_CompileWithIlcCore" Condition="'$(_IlcCacheHit)' != 'true'" />
+  </Target>
+
+  <Target Name="_CompileWithIlcCore">
     <Message Importance="High" Text="[ILC] Compiling: %(ManagedBinary.Identity) with RSP: %(ManagedBinary.RspFile)"/>
     <Exec
       Command="&quot;$(IlcToolsPath)ilc&quot; @&quot;%(ManagedBinary.RspFile)&quot;"
@@ -168,7 +172,6 @@
 
     <Message Importance="High" Text="[ILC] Output: %(ManagedBinary.OutputFile)"/>
 
-    <!-- Write cache hash after successful compilation -->
     <WriteLinesToFile File="$(_IlcCacheFile)" Lines="$(_CurrentIlcHash)" Overwrite="true" />
   </Target>
 </Project>

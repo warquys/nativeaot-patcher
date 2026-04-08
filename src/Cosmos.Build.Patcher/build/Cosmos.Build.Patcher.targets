@@ -205,13 +205,16 @@
   <Import Project="Patcher.Build.Unix.targets" Condition="'$(OS)' != 'Windows_NT'"/>
   <Import Project="Patcher.Build.Windows.targets" Condition="'$(OS)' == 'Windows_NT'"/>
 
-  <!-- Invoke cosmos.patcher on every assembly that needs patching, then write the cache hash.
-       Skipped entirely on cache hit (target-level Condition), mirroring CompileWithIlc/LinkTarget. -->
+  <!-- Wrapper: runs SetupPatcher (which sets _PatcherCacheHit), then conditionally
+       invokes the patch work via CallTarget. -->
   <Target Name="RunPatcher"
           AfterTargets="Build"
           DependsOnTargets="SetupPatcher"
-          Condition="'$(EnablePatching)' == 'true' AND '$(_PatcherCacheHit)' != 'true'">
+          Condition="'$(EnablePatching)' == 'true'">
+    <CallTarget Targets="_RunPatcherCore" Condition="'$(_PatcherCacheHit)' != 'true'" />
+  </Target>
 
+  <Target Name="_RunPatcherCore">
     <PropertyGroup>
       <_PatcherCoverageFlag Condition="'$(CosmosCoverage)' == 'true'">--coverage</_PatcherCoverageFlag>
       <_PatcherCoverageFlag Condition="'$(CosmosCoverage)' != 'true'"></_PatcherCoverageFlag>
@@ -240,7 +243,6 @@
           Condition="Exists('$(OutputPath)$(AssemblyName).pdb')"
           SkipUnchangedFiles="true" />
 
-    <!-- Write cache hash after successful patching -->
     <WriteLinesToFile File="$(_PatcherCacheFile)" Lines="$(_CurrentPatcherHash)" Overwrite="true" />
   </Target>
 
