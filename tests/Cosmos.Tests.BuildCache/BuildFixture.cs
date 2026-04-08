@@ -11,6 +11,7 @@ public class BuildFixture
     private const string Arch = "x64";
     private const string Rid = "linux-x64";
     private const string Define = "ARCH_X64";
+    private const string CosmosVersion = "3.0.43";
 
     public string RootDir { get; }
     public string ObjDir { get; }
@@ -55,7 +56,13 @@ public class BuildFixture
 
         DevKernelCsproj = Path.Combine(RootDir, "examples", "DevKernel", "DevKernel.csproj");
         DevKernelCs = Path.Combine(RootDir, "examples", "DevKernel", "Kernel.cs");
-        AsmFile = Path.Combine(RootDir, "src", "Cosmos.Kernel.Native.X64", "Runtime", "Runtime.asm");
+
+        // ASM source: DevKernel uses NuGet packages, so the ASM file the build actually
+        // reads lives inside the user's NuGet cache, not the repo source tree.
+        string nugetHome = Environment.GetEnvironmentVariable("NUGET_PACKAGES")
+                           ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget", "packages");
+        AsmFile = Path.Combine(nugetHome, "cosmos.kernel.native.x64", CosmosVersion, "build", "Runtime", "Runtime.asm");
+
         CFile = Path.Combine(RootDir, "examples", "DevKernel", "src", "C", "test.c");
         DevKernelCDir = Path.Combine(RootDir, "examples", "DevKernel", "src", "C");
     }
