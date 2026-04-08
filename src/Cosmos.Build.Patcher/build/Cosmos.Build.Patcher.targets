@@ -165,13 +165,13 @@
              Text="Patcher cache hit — skipping patching (hash: $(_CurrentPatcherHash))" />
 
     <!-- Build the set of non-patched assemblies to copy to ref/ for ILC resolution.
-         Use %(Filename) matching instead of full-path Contains() for robustness. -->
-    <ItemGroup>
-      <_PatchedFilenames Include="@(AssembliesToPatch->'%(Filename)')" />
-    </ItemGroup>
+         Use a delimited filename string for a robust Contains() check. -->
+    <PropertyGroup>
+      <_PatchedFilenamesList>;@(AssembliesToPatch->'%(Filename)', ';');</_PatchedFilenamesList>
+    </PropertyGroup>
     <ItemGroup>
       <AssembliesToCopy Include="@(CandidateAssemblies)"
-                        Condition="'@(_PatchedFilenames)' == '' OR !@(_PatchedFilenames->AnyHaveMetadataValue('Identity', '%(CandidateAssemblies.Filename)'))" />
+                        Condition="!$(_PatchedFilenamesList.Contains(';%(CandidateAssemblies.Filename);'))" />
     </ItemGroup>
 
     <!-- Always copy non-patched assemblies (even on cache hit) so ILC sees updated references.
