@@ -74,8 +74,9 @@ public sealed class GCCBuildTask : ToolTask
             byte[] fileHash = hasher.ComputeHash(stream);
             string fileHashString = BitConverter.ToString(fileHash).Replace("-", "").ToLower();
 
+            // Full SHA1 hex (40 chars) — matches YasmBuildTask's filename convention.
             string baseName = Path.GetFileNameWithoutExtension(file);
-            string outputName = $"{baseName}-{fileHashString.Substring(0, 8)}{objExt}";
+            string outputName = $"{baseName}-{fileHashString}{objExt}";
             string outputPath = Path.GetFullPath(Path.Combine(OutputPath!, outputName));
 
             validOutputFiles.Add(outputPath);

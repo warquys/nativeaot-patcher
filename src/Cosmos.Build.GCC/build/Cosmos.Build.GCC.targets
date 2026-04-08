@@ -58,7 +58,7 @@
       <CSourceFiles Include="$(GCCSourcePattern)" />
     </ItemGroup>
 
-    <Message Text="⚙️  [GCC] C source files: @(CSourceFiles->Count())" Importance="High" />
+    <Message Text="[GCC] C source files: @(CSourceFiles->Count())" Importance="High" />
 
     <!-- Strip clang-style target flags (space or equals) to keep GCC happy on macOS cross builds -->
     <PropertyGroup>

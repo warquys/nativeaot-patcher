@@ -22,26 +22,24 @@ public sealed class ComputeInputsHashTask : Microsoft.Build.Utilities.Task
 
     public override bool Execute()
     {
-        using (SHA256 sha = SHA256.Create())
+        // Sort for deterministic ordering and skip optional inputs that don't exist on disk.
+        string[] sortedFiles = InputFiles
+            .Select(f => f.ItemSpec)
+            .Where(File.Exists)
+            .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        using SHA256 sha = SHA256.Create();
+        foreach (string filePath in sortedFiles)
         {
-            // Sort for deterministic ordering
-            string[] sortedFiles = InputFiles
-                .Select(f => f.ItemSpec)
-                .Where(f => File.Exists(f))
-                .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            foreach (string filePath in sortedFiles)
-            {
-                byte[] bytes = File.ReadAllBytes(filePath);
-                sha.TransformBlock(bytes, 0, bytes.Length, null, 0);
-            }
-
-            sha.TransformFinalBlock(new byte[0], 0, 0);
-            Hash = BitConverter.ToString(sha.Hash).Replace("-", "").ToLower();
+            byte[] bytes = File.ReadAllBytes(filePath);
+            sha.TransformBlock(bytes, 0, bytes.Length, null, 0);
         }
+        sha.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
 
-        Log.LogMessage(MessageImportance.Normal, "Build cache inputs hash: {0} ({1} files)", Hash, InputFiles.Length);
+        Hash = BitConverter.ToString(sha.Hash!).Replace("-", string.Empty).ToLowerInvariant();
+
+        Log.LogMessage(MessageImportance.Normal, "Build cache inputs hash: {0} ({1} files)", Hash, sortedFiles.Length);
         return true;
     }
 }

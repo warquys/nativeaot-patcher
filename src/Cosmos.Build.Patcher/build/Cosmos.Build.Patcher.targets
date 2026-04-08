@@ -145,7 +145,8 @@
          The patcher produces non-deterministic output (Mono.Cecil generates new MVIDs),
          so we cache based on INPUTS, not outputs. -->
     <PropertyGroup>
-      <_PatcherCacheFile>$(IntermediateOutputPath)/cosmos/.patcher-hash</_PatcherCacheFile>
+      <_PatcherCacheFile>$([MSBuild]::NormalizePath('$(IntermediateOutputPath)', 'cosmos', '.patcher-hash'))</_PatcherCacheFile>
+      <_PatcherOutputFile>$([MSBuild]::NormalizePath('$(IntermediateOutputPath)', 'cosmos', '$(AssemblyName)_patched.dll'))</_PatcherOutputFile>
     </PropertyGroup>
 
     <ComputeInputsHashTask InputFiles="@(AssembliesToPatch);@(PlugRef)">
@@ -158,7 +159,7 @@
 
     <PropertyGroup>
       <_PreviousPatcherHash>@(_PreviousPatcherHashLines)</_PreviousPatcherHash>
-      <_PatcherCacheHit Condition="'$(_CurrentPatcherHash)' != '' AND '$(_CurrentPatcherHash)' == '$(_PreviousPatcherHash)'">true</_PatcherCacheHit>
+      <_PatcherCacheHit Condition="'$(_CurrentPatcherHash)' != '' AND '$(_CurrentPatcherHash)' == '$(_PreviousPatcherHash)' AND Exists('$(_PatcherOutputFile)')">true</_PatcherCacheHit>
     </PropertyGroup>
 
     <Message Condition="'$(_PatcherCacheHit)' == 'true'" Importance="High"
@@ -189,12 +190,6 @@
     <Copy SourceFiles="@(AssembliesToCopy)"
           DestinationFiles="@(AssembliesToCopy->'%(PatcherOutputPath)')"
           SkipUnchangedFiles="true" />
-
-    <!-- Copy PDB files for debug symbols (skip on cache hit) -->
-    <Copy SourceFiles="$(OutputPath)$(AssemblyName).pdb"
-          DestinationFiles="$(IntermediateOutputPath)/cosmos/$(AssemblyName)_patched.pdb"
-          Condition="'$(_PatcherCacheHit)' != 'true' AND Exists('$(OutputPath)$(AssemblyName).pdb')"
-          SkipUnchangedFiles="true" />
   </Target>
 
   <!-- Clean target to remove the asm folder -->
@@ -206,7 +201,47 @@
     <RemoveDir Directories="$(PatcherOutputPath)" />
   </Target>
 
+  <!-- Platform files only set $(_CosmosPatcherCommand) — the RunPatcher target itself is shared. -->
   <Import Project="Patcher.Build.Unix.targets" Condition="'$(OS)' != 'Windows_NT'"/>
   <Import Project="Patcher.Build.Windows.targets" Condition="'$(OS)' == 'Windows_NT'"/>
+
+  <!-- Invoke cosmos.patcher on every assembly that needs patching, then write the cache hash.
+       Skipped entirely on cache hit (target-level Condition), mirroring CompileWithIlc/LinkTarget. -->
+  <Target Name="RunPatcher"
+          AfterTargets="Build"
+          DependsOnTargets="SetupPatcher"
+          Condition="'$(EnablePatching)' == 'true' AND '$(_PatcherCacheHit)' != 'true'">
+
+    <PropertyGroup>
+      <_PatcherCoverageFlag Condition="'$(CosmosCoverage)' == 'true'">--coverage</_PatcherCoverageFlag>
+      <_PatcherCoverageFlag Condition="'$(CosmosCoverage)' != 'true'"></_PatcherCoverageFlag>
+    </PropertyGroup>
+
+    <Message Importance="High"
+             Text="Batch patching: %(AssembliesToPatch.Identity) -> %(AssembliesToPatch.PatcherOutputPath)" />
+
+    <Exec
+      Command="$(_CosmosPatcherCommand) patch --target &quot;%(AssembliesToPatch.Identity)&quot; --target-platform &quot;$(PatcherTargetPlatform)&quot; --output &quot;%(AssembliesToPatch.PatcherOutputPath)&quot; --plugs &quot;@(PlugRef-&gt;'%(Identity)', ';')&quot; $(_PatcherCoverageFlag)"
+      ConsoleToMSBuild="true"
+      IgnoreExitCode="true">
+      <Output TaskParameter="ExitCode" PropertyName="PatcherExitCode" />
+      <Output TaskParameter="ConsoleOutput" PropertyName="PatcherConsoleOutput" />
+    </Exec>
+
+    <Error Condition="'$(PatcherExitCode)' != '0'"
+           Text="Cosmos.Patcher failed for &quot;%(AssembliesToPatch.Identity)&quot; with code $(PatcherExitCode): $(PatcherConsoleOutput)" />
+
+    <Message Importance="High" Condition="'$(PatcherExitCode)' == '0'"
+             Text="Cosmos.Patcher successfully patched: '%(AssembliesToPatch.PatcherOutputPath)'" />
+
+    <!-- Copy main assembly PDB so the patched binary keeps its debug symbols. -->
+    <Copy SourceFiles="$(OutputPath)$(AssemblyName).pdb"
+          DestinationFiles="$(IntermediateOutputPath)/cosmos/$(AssemblyName)_patched.pdb"
+          Condition="Exists('$(OutputPath)$(AssemblyName).pdb')"
+          SkipUnchangedFiles="true" />
+
+    <!-- Write cache hash after successful patching -->
+    <WriteLinesToFile File="$(_PatcherCacheFile)" Lines="$(_CurrentPatcherHash)" Overwrite="true" />
+  </Target>
 
 </Project>
