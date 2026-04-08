@@ -107,7 +107,7 @@ public sealed class GCCBuildTask : ToolTask
             // Produce Windows-friendly .obj extension so the linker (which currently searches for *.obj) can pick them up
             string objExt = Path.DirectorySeparatorChar == '\\' ? ".obj" : ".o";
             string outputName = $"{baseName}-{fileHashString.Substring(0, 8)}{objExt}";
-            string outputPath = Path.Combine(OutputPath!, outputName);
+            string outputPath = Path.GetFullPath(Path.Combine(OutputPath!, outputName));
 
             validOutputFiles.Add(outputPath);
 
@@ -162,7 +162,8 @@ public sealed class GCCBuildTask : ToolTask
 
         foreach (string existing in Directory.GetFiles(OutputPath!, "*" + objExt2))
         {
-            if (validOutputFiles.Contains(existing))
+            string normalizedExisting = Path.GetFullPath(existing);
+            if (validOutputFiles.Contains(normalizedExisting))
                 continue;
 
             // Extract base name before the hash suffix: "kmain-a1b2c3d4.o" -> "kmain"

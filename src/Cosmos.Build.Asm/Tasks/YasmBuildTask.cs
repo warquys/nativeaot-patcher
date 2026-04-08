@@ -73,7 +73,7 @@ public sealed class YasmBuildTask : ToolTask
             byte[] fileHash = hasher.ComputeHash(stream);
             FileName = $"{Path.GetFileNameWithoutExtension(file)}-{BitConverter.ToString(fileHash).Replace("-", "").ToLower()}.obj";
 
-            string outputFilePath = Path.Combine(OutputPath!, FileName);
+            string outputFilePath = Path.GetFullPath(Path.Combine(OutputPath!, FileName));
             validOutputFiles.Add(outputFilePath);
 
             // Skip if output already exists (content-hash filename = up-to-date)
@@ -95,7 +95,8 @@ public sealed class YasmBuildTask : ToolTask
         // Remove orphan object files (from renamed/deleted source files) to avoid stale symbols at link time
         foreach (string existing in Directory.GetFiles(OutputPath!, "*.obj"))
         {
-            if (!validOutputFiles.Contains(existing))
+            string normalizedExisting = Path.GetFullPath(existing);
+            if (!validOutputFiles.Contains(normalizedExisting))
             {
                 Log.LogMessage(MessageImportance.Normal, $"Removing orphan object: {Path.GetFileName(existing)}");
                 File.Delete(existing);
