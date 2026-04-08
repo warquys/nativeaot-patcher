@@ -3,9 +3,13 @@
 ; Requires Inno Setup 6.x+
 
 #define MyAppName "Cosmos OS Development Kit"
+; Version comes from the COSMOS_VERSION environment variable. `cosmos install`
+; sets this from the detected Cosmos.Sdk package version (see
+; src/Cosmos.Tools/Commands/InstallCommand.cs). When invoking ISCC.exe directly,
+; export COSMOS_VERSION first.
 #define MyAppVersion GetEnv('COSMOS_VERSION')
 #if MyAppVersion == ""
-  #define MyAppVersion "3.0.42"
+  #error "COSMOS_VERSION env var must be set when invoking ISCC (typically via 'cosmos install')"
 #endif
 #define MyAppPublisher "Cosmos Project"
 #define MyAppURL "https://github.com/CosmosOS/nativeaot-patcher"

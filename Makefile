@@ -19,7 +19,7 @@ OUTPUT     := ./output-$(ARCH)
 DEVKERNEL  := ./examples/DevKernel/DevKernel.csproj
 TEST_ENGINE := ./tests/Cosmos.TestRunner.Engine/Cosmos.TestRunner.Engine.csproj
 
-.PHONY: setup build clean run test
+.PHONY: setup build clean distclean run test test-cache
 
 setup:
 	./.devcontainer/postCreateCommand.sh
@@ -30,7 +30,12 @@ build:
 		$(DEVKERNEL) -o $(OUTPUT)
 
 clean:
-	rm -rf ./output-x64 ./output-arm64 ./artifacts uart.log
+	rm -rf ./output-x64 ./output-arm64 uart.log
+
+distclean: clean
+	rm -rf ./artifacts
+	dotnet nuget remove source local-packages 2>/dev/null || true
+	rm -rf ~/.nuget/packages/cosmos.* 2>/dev/null || true
 
 run: build
 	@echo "Starting QEMU ($(ARCH))... Press Ctrl+A X to exit."
@@ -54,3 +59,6 @@ test:
 	dotnet run --project $(TEST_ENGINE) --no-build \
 		-- tests/Kernels/Cosmos.Kernel.Tests.$(KERNEL) $(ARCH) $(TIMEOUT) \
 		test-results-$(KERNEL)-$(ARCH).xml ci
+
+test-cache:
+	dotnet test tests/Cosmos.Tests.BuildCache/ -c Debug

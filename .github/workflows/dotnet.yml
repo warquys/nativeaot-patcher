@@ -152,6 +152,52 @@ jobs:
           name: Cosmos.Build.Asm.Test-Results
           path: ./tests/Cosmos.Tests.Build.Asm/TestResults/Cosmos.Tests.Build.Asm.trx
 
+  build-cache-tests:
+    name: Run Build Cache Tests
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        os: [ ubuntu-latest ]
+        dotnet-version: [ 10.0.x ]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ matrix.dotnet-version }}
+
+      - name: Clear NuGet Cache
+        run: dotnet nuget locals all --clear
+
+      - name: Build and Install Cosmos Packages
+        run: ./.devcontainer/postCreateCommand.sh
+        env:
+          DOTNET_CLI_TELEMETRY_OPTOUT: 1
+          DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+
+      - name: Install Build Tools
+        run: sudo apt-get update && sudo apt-get install -y yasm lld xorriso
+
+      - name: Build Test Project
+        run: dotnet build ./tests/Cosmos.Tests.BuildCache/Cosmos.Tests.BuildCache.csproj --configuration Debug
+
+      - name: Run Build Cache Tests
+        run: dotnet test ./tests/Cosmos.Tests.BuildCache/Cosmos.Tests.BuildCache.csproj --no-build --configuration Debug --logger "trx;LogFileName=Cosmos.Tests.BuildCache.trx" -v normal
+        env:
+          PATH: ${{ github.workspace }}/.dotnet/tools:$HOME/.dotnet/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Cosmos.Tests.BuildCache-Results
+          path: ./tests/Cosmos.Tests.BuildCache/TestResults/Cosmos.Tests.BuildCache.trx
+
   windows-iso-tests:
     name: Run ISO Build Tests - Windows (${{ matrix.arch }})
     runs-on: ${{ matrix.os }}

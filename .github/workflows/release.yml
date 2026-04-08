@@ -1,10 +1,20 @@
-name: Build Installers
+name: Release
+
+# Single source of version = git tag.
+# Push a `v*` tag (e.g. `v3.0.44`) to:
+#   1. Build all NuGet packages with VersionPrefix=<tag>
+#   2. Publish them to NuGet.org
+#   3. Build the Windows installer
+#   4. Create a GitHub release
+#
+# `workflow_dispatch` is available for manual reruns / testing; manual runs
+# only build artifacts and DO NOT publish to NuGet or create a GitHub release.
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version override (e.g., 3.0.42). Leave empty to use Directory.Build.props.'
+        description: 'Version override (e.g., 3.0.43). Leave empty to use Directory.Build.props.'
         required: false
         type: string
   push:
@@ -39,17 +49,24 @@ jobs:
         id: version
         run: |
           if [[ -n "${{ inputs.version }}" ]]; then
-            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+            version="${{ inputs.version }}"
           elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+            version="${GITHUB_REF#refs/tags/v}"
           else
             version=$(grep -oP '(?<=<VersionPrefix>)[^<]+' Directory.Build.props)
-            echo "version=$version" >> $GITHUB_OUTPUT
           fi
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "Using version: $version"
 
       - name: Build packages
+        env:
+          # Single source of truth: $(VersionPrefix) flows from this env var into
+          # every Cosmos package via Directory.Build.props, Directory.Packages.props,
+          # the Cosmos.Sdk Sdk.props pack-time substitution, the Cosmos.Build.Templates
+          # template, Cosmos.Kernel's KernelVersion.g.cs / kmain_version.h codegen,
+          # and the BuildCache test fixture.
+          VersionPrefix: ${{ steps.version.outputs.version }}
         run: |
-          export VersionSuffix="build.$(date +%Y%m%d%H%M)"
           dotnet nuget locals all --clear
           ./.devcontainer/postCreateCommand.sh
 
@@ -62,6 +79,33 @@ jobs:
 
     outputs:
       version: ${{ steps.version.outputs.version }}
+
+  # ── Publish to NuGet (tag pushes only) ───────────────────────────────────────
+  publish-nuget:
+    name: Publish to NuGet
+    needs: build-packages
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          name: cosmos-packages
+          path: packages
+
+      - name: Push to NuGet
+        run: |
+          for pkg in packages/*.nupkg; do
+            dotnet nuget push "$pkg" \
+              --api-key "${{ secrets.NUGET_API_KEY }}" \
+              --source https://api.nuget.org/v3/index.json \
+              --skip-duplicate
+          done
 
   # ── Windows Installer ────────────────────────────────────────────────────────
   build-installer-windows:
@@ -103,7 +147,7 @@ jobs:
   # ── Create GitHub Release ────────────────────────────────────────────────────
   create-release:
     name: Create Release
-    needs: [build-packages, build-installer-windows]
+    needs: [build-packages, publish-nuget, build-installer-windows]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:

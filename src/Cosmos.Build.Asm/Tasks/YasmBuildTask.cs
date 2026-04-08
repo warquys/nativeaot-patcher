@@ -64,6 +64,7 @@ public sealed class YasmBuildTask : ToolTask
         }
 
         using SHA1? hasher = SHA1.Create();
+        var validOutputFiles = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (string file in SourceFiles!)
         {
@@ -71,6 +72,17 @@ public sealed class YasmBuildTask : ToolTask
             using FileStream stream = File.OpenRead(FilePath);
             byte[] fileHash = hasher.ComputeHash(stream);
             FileName = $"{Path.GetFileNameWithoutExtension(file)}-{BitConverter.ToString(fileHash).Replace("-", "").ToLower()}.obj";
+
+            string outputFilePath = Path.GetFullPath(Path.Combine(OutputPath!, FileName));
+            validOutputFiles.Add(outputFilePath);
+
+            // Skip if output already exists (content-hash filename = up-to-date)
+            if (File.Exists(outputFilePath))
+            {
+                Log.LogMessage(MessageImportance.Normal, $"Skipping {file} (up to date: {FileName})");
+                continue;
+            }
+
             Log.LogMessage(MessageImportance.High, $"[Debug] About to run base.Execute() for {FileName}");
 
             if (!base.Execute())
@@ -80,7 +92,18 @@ public sealed class YasmBuildTask : ToolTask
             }
         }
 
-        Log.LogMessage(MessageImportance.High, "✅ YasmBuildTask completed successfully.");
+        // Remove orphan object files (from renamed/deleted source files) to avoid stale symbols at link time
+        foreach (string existing in Directory.GetFiles(OutputPath!, "*.obj"))
+        {
+            string normalizedExisting = Path.GetFullPath(existing);
+            if (!validOutputFiles.Contains(normalizedExisting))
+            {
+                Log.LogMessage(MessageImportance.Normal, $"Removing orphan object: {Path.GetFileName(existing)}");
+                File.Delete(existing);
+            }
+        }
+
+        Log.LogMessage(MessageImportance.High, "YasmBuildTask completed successfully.");
         return true;
     }
 

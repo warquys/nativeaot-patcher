@@ -134,8 +134,10 @@ Write-Host "Packing multi-arch packages..." -ForegroundColor Cyan
 foreach ($proj in $MultiArchProjects) {
     Write-Host "Packing $proj..." -ForegroundColor Yellow
     Get-ChildItem -Path "artifacts/obj/$proj" -Filter "*.nuspec" -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force
-    # Only delete exact package name (not prefix matches like Cosmos.Kernel.* which would delete Native, HAL, etc)
-    Remove-Item -Path "artifacts/package/release/$proj.3.0.*.nupkg" -Force -ErrorAction SilentlyContinue
+    # Only delete exact package name (not prefix matches like Cosmos.Kernel.* which would
+    # delete Native, HAL, etc). Anchoring on a digit catches any version (real package
+    # names start with a letter after the dot, real versions start with a digit).
+    Remove-Item -Path "artifacts/package/release/$proj.[0-9]*.nupkg" -Force -ErrorAction SilentlyContinue
     dotnet pack "src/$proj/$proj.csproj" -c Release -o artifacts/package/release -p:NoBuild=true
 }
 

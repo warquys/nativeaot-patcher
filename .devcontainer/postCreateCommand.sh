@@ -120,8 +120,10 @@ echo "Packing multi-arch packages..."
 for proj in "${MULTIARCH_PROJECTS[@]}"; do
     echo "Packing $proj..."
     find "artifacts/obj/$proj" -name "*.nuspec" -delete 2>/dev/null || true
-    # Only delete exact package name (not prefix matches like Cosmos.Kernel.* which would delete Native, HAL, etc)
-    rm -f "artifacts/package/release/${proj}.3.0."*.nupkg 2>/dev/null || true
+    # Only delete exact package name (not prefix matches like Cosmos.Kernel.* which would
+    # delete Native, HAL, etc). Anchoring on a digit catches any version (real package
+    # names start with a letter after the dot, real versions start with a digit).
+    rm -f "artifacts/package/release/${proj}".[0-9]*.nupkg 2>/dev/null || true
     dotnet pack "src/$proj/$proj.csproj" -c Release -o artifacts/package/release -p:NoBuild=true
 done
 
