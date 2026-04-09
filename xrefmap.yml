@@ -18021,13 +18021,13 @@ references:
   fullName: Cosmos.Kernel.System.Graphics.FullScreenCanvas.IsInUse
   nameWithType: FullScreenCanvas.IsInUse
 - uid: Cosmos.Kernel.System.Graphics.FullScreenCanvas.TryGetFullScreenCanvas(Cosmos.Kernel.System.Graphics.Mode,Cosmos.Kernel.System.Graphics.Canvas@)
-  name: TryGetFullScreenCanvas(Mode, out Canvas)
+  name: TryGetFullScreenCanvas(Mode, out Canvas?)
   href: api/Cosmos.Kernel.System.Graphics.FullScreenCanvas.html#Cosmos_Kernel_System_Graphics_FullScreenCanvas_TryGetFullScreenCanvas_Cosmos_Kernel_System_Graphics_Mode_Cosmos_Kernel_System_Graphics_Canvas__
   commentId: M:Cosmos.Kernel.System.Graphics.FullScreenCanvas.TryGetFullScreenCanvas(Cosmos.Kernel.System.Graphics.Mode,Cosmos.Kernel.System.Graphics.Canvas@)
   name.vb: TryGetFullScreenCanvas(Mode, Canvas)
-  fullName: Cosmos.Kernel.System.Graphics.FullScreenCanvas.TryGetFullScreenCanvas(Cosmos.Kernel.System.Graphics.Mode, out Cosmos.Kernel.System.Graphics.Canvas)
+  fullName: Cosmos.Kernel.System.Graphics.FullScreenCanvas.TryGetFullScreenCanvas(Cosmos.Kernel.System.Graphics.Mode, out Cosmos.Kernel.System.Graphics.Canvas?)
   fullName.vb: Cosmos.Kernel.System.Graphics.FullScreenCanvas.TryGetFullScreenCanvas(Cosmos.Kernel.System.Graphics.Mode, Cosmos.Kernel.System.Graphics.Canvas)
-  nameWithType: FullScreenCanvas.TryGetFullScreenCanvas(Mode, out Canvas)
+  nameWithType: FullScreenCanvas.TryGetFullScreenCanvas(Mode, out Canvas?)
   nameWithType.vb: FullScreenCanvas.TryGetFullScreenCanvas(Mode, Canvas)
 - uid: Cosmos.Kernel.System.Graphics.FullScreenCanvas.TryGetFullScreenCanvas*
   name: TryGetFullScreenCanvas
