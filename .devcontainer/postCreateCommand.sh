@@ -4,6 +4,31 @@ set -e
 
 echo "=== Starting postCreate setup (multi-arch) ==="
 
+# ── Resolve Cosmos package version ───────────────────────────────────────────
+# Single source of truth = global.json `msbuild-sdks.Cosmos.Sdk`.
+#
+# - Release CI sets $VersionPrefix from the git tag (e.g. `3.0.44`) and we just
+#   rewrite global.json to match so every `<Sdk Name="Cosmos.Sdk" />` in the
+#   repo resolves to the CI-built package.
+# - Local dev (no $VersionPrefix): derive a date-stamped dev version of the
+#   latest git tag so each rebuild produces a distinct package (e.g.
+#   `3.0.44.09042026`) and kernels always resolve to the freshly built one.
+if [[ -z "${VersionPrefix:-}" ]]; then
+  BASE_TAG=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "3.0.44")
+  # yyyyMMdd (not ddMMyyyy) to avoid NuGet stripping a leading zero from the
+  # day component when normalizing the package version.
+  DATE_SUFFIX=$(date +%Y%m%d)
+  VersionPrefix="${BASE_TAG}.${DATE_SUFFIX}"
+fi
+export VersionPrefix
+echo "Using Cosmos package version: ${VersionPrefix}"
+
+# Rewrite global.json `msbuild-sdks.Cosmos.Sdk` so kernel projects
+# (`<Sdk Name="Cosmos.Sdk" />` without a literal Version) resolve to the
+# version we're about to build. Uses sed since jq isn't always available.
+sed -i.bak -E "s|(\"Cosmos\.Sdk\"[[:space:]]*:[[:space:]]*\")[^\"]+(\")|\1${VersionPrefix}\2|" global.json
+rm -f global.json.bak
+
 # Clear Cosmos packages from NuGet cache
 echo "Clearing Cosmos packages from NuGet cache..."
 rm -rf ~/.nuget/packages/cosmos.* 2>/dev/null || true

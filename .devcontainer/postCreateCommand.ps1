@@ -5,6 +5,34 @@ $ErrorActionPreference = "Stop"
 
 Write-Host "=== Starting postCreate setup (multi-arch) ===" -ForegroundColor Cyan
 
+# ── Resolve Cosmos package version ───────────────────────────────────────────
+# Single source of truth = global.json `msbuild-sdks.Cosmos.Sdk`.
+# See postCreateCommand.sh for the full explanation.
+if (-not $env:VersionPrefix) {
+    try {
+        $baseTag = (git describe --tags --abbrev=0 2>$null).TrimStart('v')
+    } catch {
+        $baseTag = "3.0.44"
+    }
+    if (-not $baseTag) { $baseTag = "3.0.44" }
+    # yyyyMMdd (not ddMMyyyy) to avoid NuGet stripping a leading zero from the
+    # day component when normalizing the package version.
+    $dateSuffix = Get-Date -Format "yyyyMMdd"
+    $env:VersionPrefix = "$baseTag.$dateSuffix"
+}
+Write-Host "Using Cosmos package version: $env:VersionPrefix" -ForegroundColor Cyan
+
+# Rewrite global.json `msbuild-sdks.Cosmos.Sdk` so kernel projects
+# (<Sdk Name="Cosmos.Sdk" /> without a literal Version) resolve to the
+# version we're about to build.
+$globalJson = Get-Content "global.json" -Raw | ConvertFrom-Json
+if (-not $globalJson.PSObject.Properties.Name.Contains("msbuild-sdks")) {
+    $globalJson | Add-Member -NotePropertyName "msbuild-sdks" -NotePropertyValue ([pscustomobject]@{})
+}
+$globalJson.'msbuild-sdks' | Add-Member -NotePropertyName "Cosmos.Sdk" -NotePropertyValue $env:VersionPrefix -Force
+($globalJson | ConvertTo-Json -Depth 10) | Set-Content "global.json" -NoNewline
+Add-Content "global.json" "`n"
+
 # Clear Cosmos packages from NuGet cache
 Write-Host "Clearing Cosmos packages from NuGet cache..."
 Remove-Item -Path "$env:USERPROFILE\.nuget\packages\cosmos.*" -Recurse -Force -ErrorAction SilentlyContinue

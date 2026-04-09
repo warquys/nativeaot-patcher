@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version override (e.g., 3.0.43). Leave empty to use Directory.Build.props.'
+        description: 'Version override (e.g., 3.0.44). Leave empty to derive from global.json.'
         required: false
         type: string
   push:
@@ -53,7 +53,8 @@ jobs:
           elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             version="${GITHUB_REF#refs/tags/v}"
           else
-            version=$(grep -oP '(?<=<VersionPrefix>)[^<]+' Directory.Build.props)
+            # Fallback: read from global.json `msbuild-sdks.Cosmos.Sdk`
+            version=$(grep -oP '"Cosmos\.Sdk"\s*:\s*"\K[^"]+' global.json)
           fi
           echo "version=$version" >> $GITHUB_OUTPUT
           echo "Using version: $version"
@@ -64,7 +65,9 @@ jobs:
           # every Cosmos package via Directory.Build.props, Directory.Packages.props,
           # the Cosmos.Sdk Sdk.props pack-time substitution, the Cosmos.Build.Templates
           # template, Cosmos.Kernel's KernelVersion.g.cs / kmain_version.h codegen,
-          # and the BuildCache test fixture.
+          # and the BuildCache test fixture. postCreateCommand.sh also rewrites
+          # global.json `msbuild-sdks.Cosmos.Sdk` to this value so in-repo kernels
+          # using `<Sdk Name="Cosmos.Sdk" />` resolve the CI-built package.
           VersionPrefix: ${{ steps.version.outputs.version }}
         run: |
           dotnet nuget locals all --clear
