@@ -57,7 +57,7 @@ namespace Cosmos.Kernel.Core.Runtime
         /// Called from RhpInitialDynamicInterfaceDispatch to resolve interface method calls.
         /// </summary>
         [RuntimeExport("RhpCidResolve")]
-        private static unsafe IntPtr RhpCidResolve(object pObject, IntPtr pCell)
+        internal static unsafe IntPtr RhpCidResolve(object pObject, IntPtr pCell)
         {
             //Serial.WriteString("[CID] Start\n");
 
@@ -94,7 +94,7 @@ namespace Cosmos.Kernel.Core.Runtime
         }
 
         [RuntimeExport("RhpResolveInterfaceMethod")]
-        private static IntPtr RhpResolveInterfaceMethod(object pObject, IntPtr pCell)
+        internal static IntPtr RhpResolveInterfaceMethod(object pObject, IntPtr pCell)
         {
             if (pObject == null)
             {
@@ -118,7 +118,7 @@ namespace Cosmos.Kernel.Core.Runtime
         }
 
         [RuntimeExport("RhResolveDispatch")]
-        private static IntPtr RhResolveDispatch(object pObject, MethodTable* interfaceType, ushort slot)
+        internal static IntPtr RhResolveDispatch(object pObject, MethodTable* interfaceType, ushort slot)
         {
             DispatchCellInfo cellInfo = default;
             cellInfo.CellType = DispatchCellType.InterfaceAndSlot;
@@ -129,7 +129,7 @@ namespace Cosmos.Kernel.Core.Runtime
         }
 
         [RuntimeExport("RhResolveDispatchOnType")]
-        private static IntPtr RhResolveDispatchOnType(MethodTable* pInstanceType, MethodTable* pInterfaceType, ushort slot)
+        internal static IntPtr RhResolveDispatchOnType(MethodTable* pInstanceType, MethodTable* pInterfaceType, ushort slot)
         {
             return DispatchResolve.FindInterfaceMethodImplementationTarget(pInstanceType,
                                                                           pInterfaceType,
@@ -139,7 +139,7 @@ namespace Cosmos.Kernel.Core.Runtime
         }
 
         [RuntimeExport("RhResolveStaticDispatchOnType")]
-        private static IntPtr RhResolveStaticDispatchOnType(MethodTable* pInstanceType, MethodTable* pInterfaceType, ushort slot, MethodTable** ppGenericContext)
+        internal static IntPtr RhResolveStaticDispatchOnType(MethodTable* pInstanceType, MethodTable* pInterfaceType, ushort slot, MethodTable** ppGenericContext)
         {
             return DispatchResolve.FindInterfaceMethodImplementationTarget(pInstanceType,
                                                                           pInterfaceType,

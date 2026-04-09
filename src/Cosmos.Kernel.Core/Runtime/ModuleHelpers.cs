@@ -57,7 +57,7 @@ internal static unsafe class ModuleHelpers
     }
 
     [RuntimeExport("RhGetOSModuleFromPointer")]
-    static IntPtr RhGetOSModuleFromPointer(IntPtr ptr)
+    internal static IntPtr RhGetOSModuleFromPointer(IntPtr ptr)
     {
         return (nint)OsModule;
     }

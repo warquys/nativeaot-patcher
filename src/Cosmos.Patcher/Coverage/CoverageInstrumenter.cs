@@ -521,36 +521,7 @@ public class CoverageInstrumenter
             return false;
         }
 
-        // Skip methods exported to native code via [RuntimeExport].
-        // These are NativeAOT runtime entry points (RhpNewFast, memset, etc.)
-        // called before static class constructors have run.
-        if (HasRuntimeExportAttribute(method))
-        {
-            return false;
-        }
-
         return true;
-    }
-
-    /// <summary>
-    /// Check whether a method has a [RuntimeExport] attribute.
-    /// </summary>
-    private static bool HasRuntimeExportAttribute(MethodDefinition method)
-    {
-        if (!method.HasCustomAttributes)
-        {
-            return false;
-        }
-
-        foreach (var attr in method.CustomAttributes)
-        {
-            if (attr.AttributeType.Name == "RuntimeExportAttribute")
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private string? FindTrackerAssembly()

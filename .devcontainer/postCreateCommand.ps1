@@ -5,6 +5,46 @@ $ErrorActionPreference = "Stop"
 
 Write-Host "=== Starting postCreate setup (multi-arch) ===" -ForegroundColor Cyan
 
+# ── Resolve Cosmos package version ───────────────────────────────────────────
+# Single source of truth, in order of precedence:
+#   1. $env:VersionPrefix (set by Release CI from the git tag)
+#   2. Latest `v*` git tag (local dev on a full clone)
+#   3. global.json `msbuild-sdks.Cosmos.Sdk` (PR CI / shallow checkouts)
+# See postCreateCommand.sh for the full explanation.
+if (-not $env:VersionPrefix) {
+    $baseTag = $null
+    try {
+        $gitTag = git describe --tags --abbrev=0 2>$null
+        if ($LASTEXITCODE -eq 0 -and $gitTag) {
+            $baseTag = $gitTag.Trim().TrimStart('v')
+        }
+    } catch { }
+    if (-not $baseTag) {
+        $match = Select-String -Path "global.json" -Pattern '"Cosmos\.Sdk"\s*:\s*"([0-9]+\.[0-9]+\.[0-9]+)' -ErrorAction SilentlyContinue
+        if ($match) { $baseTag = $match.Matches[0].Groups[1].Value }
+    }
+    if (-not $baseTag) {
+        Write-Error "ERROR: could not resolve Cosmos base version from git tags or global.json"
+        exit 1
+    }
+    # yyyyMMdd (not ddMMyyyy) to avoid NuGet stripping a leading zero from the
+    # day component when normalizing the package version.
+    $dateSuffix = Get-Date -Format "yyyyMMdd"
+    $env:VersionPrefix = "$baseTag.$dateSuffix"
+}
+Write-Host "Using Cosmos package version: $env:VersionPrefix" -ForegroundColor Cyan
+
+# Rewrite global.json `msbuild-sdks.Cosmos.Sdk` so kernel projects
+# (<Sdk Name="Cosmos.Sdk" /> without a literal Version) resolve to the
+# version we're about to build.
+$globalJson = Get-Content "global.json" -Raw | ConvertFrom-Json
+if (-not $globalJson.PSObject.Properties.Name.Contains("msbuild-sdks")) {
+    $globalJson | Add-Member -NotePropertyName "msbuild-sdks" -NotePropertyValue ([pscustomobject]@{})
+}
+$globalJson.'msbuild-sdks' | Add-Member -NotePropertyName "Cosmos.Sdk" -NotePropertyValue $env:VersionPrefix -Force
+($globalJson | ConvertTo-Json -Depth 10) | Set-Content "global.json" -NoNewline
+Add-Content "global.json" "`n"
+
 # Clear Cosmos packages from NuGet cache
 Write-Host "Clearing Cosmos packages from NuGet cache..."
 Remove-Item -Path "$env:USERPROFILE\.nuget\packages\cosmos.*" -Recurse -Force -ErrorAction SilentlyContinue

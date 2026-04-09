@@ -77,7 +77,7 @@ internal static unsafe class Casting
     }
 
     [RuntimeExport("RhTypeCast_CheckCastClassSpecial")]
-    static object? RhTypeCast_CheckCastClassSpecial(object obj, MethodTable* typeHandle, bool fThrow)
+    internal static object? RhTypeCast_CheckCastClassSpecial(object obj, MethodTable* typeHandle, bool fThrow)
     {
         if (obj == null)
         {
@@ -93,13 +93,13 @@ internal static unsafe class Casting
     }
 
     [RuntimeExport("RhTypeCast_CheckCastAny")]
-    static unsafe object RhTypeCast_CheckCastAny(object obj, MethodTable* typeHandle)
+    internal static unsafe object RhTypeCast_CheckCastAny(object obj, MethodTable* typeHandle)
     {
         return obj;
     }
 
     [RuntimeExport("RhTypeCast_CheckArrayStore")]
-    static void CheckArrayStore(object array, object obj)
+    internal static void CheckArrayStore(object array, object obj)
     {
         __CheckArrayStore(null!, array, obj);
     }
