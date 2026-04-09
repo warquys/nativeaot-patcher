@@ -19,7 +19,7 @@ public unsafe class MetaTable
     }
 
     [RuntimeExport("RhHandleGetDependent")]
-    static GCObject* RhHandleGetDependent(IntPtr handle, out GCObject* pSecondary)
+    internal static GCObject* RhHandleGetDependent(IntPtr handle, out GCObject* pSecondary)
     {
         GCObject* primary = GarbageCollector.HandleGetPrimary(handle);
         if (primary != null)
@@ -35,7 +35,7 @@ public unsafe class MetaTable
     }
 
     [RuntimeExport("RhHandleSetDependentSecondary")]
-    static void RhHandleSetDependentSecondary(IntPtr handle, GCObject* pSecondary)
+    internal static void RhHandleSetDependentSecondary(IntPtr handle, GCObject* pSecondary)
     {
         GarbageCollector.HandleSetSecondary(handle, pSecondary);
     }
