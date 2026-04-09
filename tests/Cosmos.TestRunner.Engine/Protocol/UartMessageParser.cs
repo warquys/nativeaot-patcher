@@ -164,6 +164,13 @@ public class UartMessageParser
         int testNumber = BitConverter.ToUInt16(payload, 0);
         string testName = Encoding.UTF8.GetString(payload, 2, payload.Length - 2);
 
+        TestResult? existingTest = results.Tests.Find(t => t.TestNumber == testNumber);
+        if (existingTest != null)
+        {
+            existingTest.TestName = testName;
+            return;
+        }
+
         // Add test with pending status
         results.Tests.Add(new TestResult
         {
@@ -184,12 +191,9 @@ public class UartMessageParser
         int testNumber = BitConverter.ToUInt16(payload, 0);
         uint durationMs = BitConverter.ToUInt32(payload, 2);
 
-        var test = results.Tests.Find(t => t.TestNumber == testNumber);
-        if (test != null)
-        {
-            test.Status = TestStatus.Passed;
-            test.DurationMs = durationMs;
-        }
+        TestResult test = GetOrCreateTestResult(results, testNumber);
+        test.Status = TestStatus.Passed;
+        test.DurationMs = durationMs;
     }
 
     private static void ParseTestFail(byte[] payload, TestResults results)
@@ -203,12 +207,9 @@ public class UartMessageParser
         int testNumber = BitConverter.ToUInt16(payload, 0);
         string errorMessage = Encoding.UTF8.GetString(payload, 2, payload.Length - 2);
 
-        var test = results.Tests.Find(t => t.TestNumber == testNumber);
-        if (test != null)
-        {
-            test.Status = TestStatus.Failed;
-            test.ErrorMessage = errorMessage;
-        }
+        TestResult test = GetOrCreateTestResult(results, testNumber);
+        test.Status = TestStatus.Failed;
+        test.ErrorMessage = errorMessage;
     }
 
     private static void ParseTestSkip(byte[] payload, TestResults results)
@@ -222,12 +223,9 @@ public class UartMessageParser
         int testNumber = BitConverter.ToUInt16(payload, 0);
         string reason = Encoding.UTF8.GetString(payload, 2, payload.Length - 2);
 
-        var test = results.Tests.Find(t => t.TestNumber == testNumber);
-        if (test != null)
-        {
-            test.Status = TestStatus.Skipped;
-            test.ErrorMessage = reason;
-        }
+        TestResult test = GetOrCreateTestResult(results, testNumber);
+        test.Status = TestStatus.Skipped;
+        test.ErrorMessage = reason;
     }
 
     private static void ParseTestSuiteEnd(byte[] payload, TestResults results)
@@ -269,5 +267,23 @@ public class UartMessageParser
             ushort methodId = BitConverter.ToUInt16(payload, 2 + i * 2);
             results.CoverageHitMethodIds.Add(methodId);
         }
+    }
+
+    private static TestResult GetOrCreateTestResult(TestResults results, int testNumber)
+    {
+        TestResult? test = results.Tests.Find(t => t.TestNumber == testNumber);
+        if (test != null)
+        {
+            return test;
+        }
+
+        test = new TestResult
+        {
+            TestNumber = testNumber,
+            TestName = $"Test {testNumber}",
+            Status = TestStatus.Passed
+        };
+        results.Tests.Add(test);
+        return test;
     }
 }
