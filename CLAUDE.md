@@ -21,7 +21,7 @@ make setup                          # Build all packages (.devcontainer/postCrea
 make build                          # Build DevKernel ISO
 make run                            # Build + run in QEMU (x64 uses KVM)
 make clean                          # Remove output-x64/, output-arm64/, artifacts/
-make test KERNEL=Memory             # Run a kernel test suite (HelloWorld, Memory, TypeCasting, Timer, Network, Threading, Graphic)
+make test KERNEL=Memory             # Run a kernel test suite (HelloWorld, Memory, TypeCasting, Timer, Network, Threading, Graphic, GarbageCollector)
 make test KERNEL=HelloWorld ARCH=arm64 TIMEOUT=90
 ```
 
