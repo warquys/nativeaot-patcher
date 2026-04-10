@@ -117,7 +117,7 @@
 // │ InitializeModules                                 │ Std │  5 │   0 │ stub │   1   │  33  │  50  │
 // │ RhCompatibleReentrantWaitAny                      │ Std │  4 │   1 │ stub │   1   │  33  │ 100  │
 // │ RhCreateCrashDumpIfEnabled                        │ Std │  2 │   0 │ stub │   1   │  33  │  50  │
-// │ RhCurrentOSThreadId                               │ Std │  0 │   1 │ stub │   1   │  —   │ 100  │
+// │ RhCurrentOSThreadId                               │ Std │  0 │   1 │ real │   1   │  —   │ 100  │
 // │ RhGetCurrentThreadStackBounds                     │ Thr │  0 │   2 │ real │   1   │  —   │  50  │
 // │ RhGetProcessCpuCount                              │ Std │  0 │   1 │ stub │   1   │  —   │ 100  │
 // │ RhGetRuntimeVersion                               │ Std │  0 │   1 │ stub │   1   │  —   │ 100  │
@@ -413,7 +413,7 @@ public unsafe class Kernel : Sys.Kernel
         // -- RhCreateCrashDumpIfEnabled --
         TR.Run("RhCreateCrashDumpIfEnabled_Smoke", Test_RhCreateCrashDumpIfEnabled_Smoke);
         // -- RhCurrentOSThreadId --
-        TR.Run("RhCurrentOSThreadId_ReturnsOne", Test_RhCurrentOSThreadId_ReturnsOne);
+        TR.Run("RhCurrentOSThreadId_ReturnsNonNegative", Test_RhCurrentOSThreadId_ReturnsNonNegative);
         // -- RhGetCurrentThreadStackBounds --
         TR.Run("RhGetCurrentThreadStackBounds_HighAboveLow", Test_RhGetCurrentThreadStackBounds_HighAboveLow);
         // -- RhGetProcessCpuCount --
@@ -1194,10 +1194,10 @@ public unsafe class Kernel : Sys.Kernel
     }
 
     // -- RhCurrentOSThreadId --
-    private static void Test_RhCurrentOSThreadId_ReturnsOne()
+    private static void Test_RhCurrentOSThreadId_ReturnsNonNegative()
     {
         ulong id = StartupCodeHelpers.RhCurrentOSThreadId();
-        Assert.True(id == 1UL, "RhCurrentOSThreadId returns 1 in the single-thread kernel");
+        Assert.True(id < 256UL, "RhCurrentOSThreadId returns a valid thread ID");
     }
 
     // -- RhGetCurrentThreadStackBounds --
