@@ -36,7 +36,7 @@ on:
 jobs:
   run-tests:
     name: ${{ inputs.suite_name }} Tests - ${{ matrix.arch }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -92,8 +92,14 @@ jobs:
           dotnet tool uninstall -g Cosmos.Tools 2>/dev/null || true
           dotnet tool install -g Cosmos.Tools --add-source artifacts/package/release
 
-      - name: 🔧 Install Build Tools
-        run: cosmos install --auto
+      - name: 📥 Download Build Tools Cache
+        uses: actions/download-artifact@v4
+        with:
+          name: build-tools-cache
+          path: /tmp/build-tools-cache
+
+      - name: 🔧 Restore Build Tools
+        run: sudo dpkg -i /tmp/build-tools-cache/*.deb
 
       - name: 🔍 Verify Tools Installation
         run: cosmos check

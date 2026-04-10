@@ -12,9 +12,13 @@ public class UninstallSettings : CommandSettings
     [Description("Automatically uninstall without prompting")]
     public bool Auto { get; set; }
 
-    [CommandOption("--skip-tools")]
-    [Description("Skip system tools removal")]
-    public bool SkipTools { get; set; }
+    [CommandOption("--tools")]
+    [Description("Only remove system tools (QEMU, lld, xorriso, yasm, cross-compilers)")]
+    public bool Tools { get; set; }
+
+    [CommandOption("--packages")]
+    [Description("Only remove Cosmos dotnet tools, templates, and VS Code extension")]
+    public bool Packages { get; set; }
 }
 
 public class UninstallCommand : AsyncCommand<UninstallSettings>
@@ -34,8 +38,12 @@ public class UninstallCommand : AsyncCommand<UninstallSettings>
             AnsiConsole.WriteLine();
         }
 
+        // When neither --tools nor --packages is specified, remove everything
+        bool removeTools = !settings.Packages || settings.Tools;
+        bool removePackages = !settings.Tools || settings.Packages;
+
         // Remove system tools
-        if (!settings.SkipTools)
+        if (removeTools)
         {
             string toolsPath = ToolChecker.GetCosmosToolsPath();
             string packageManager = PlatformInfo.GetPackageManager();
@@ -95,25 +103,28 @@ public class UninstallCommand : AsyncCommand<UninstallSettings>
             }
         }
 
-        // Remove NuGet feed
-        AnsiConsole.Markup("  NuGet feed -> remove ... ");
-        bool nugetOk = await RunAsync("dotnet", "nuget remove source \"Cosmos Local Feed\"");
-        AnsiConsole.MarkupLine(nugetOk ? "[green]OK[/]" : "[dim]not found[/]");
+        if (removePackages)
+        {
+            // Remove NuGet feed
+            AnsiConsole.Markup("  NuGet feed -> remove ... ");
+            bool nugetOk = await RunAsync("dotnet", "nuget remove source \"Cosmos Local Feed\"");
+            AnsiConsole.MarkupLine(nugetOk ? "[green]OK[/]" : "[dim]not found[/]");
 
-        // Uninstall dotnet tools
-        AnsiConsole.Markup("  Cosmos.Patcher -> uninstall ... ");
-        bool patcherOk = await RunAsync("dotnet", "tool uninstall -g Cosmos.Patcher");
-        AnsiConsole.MarkupLine(patcherOk ? "[green]OK[/]" : "[dim]not installed[/]");
+            // Uninstall dotnet tools
+            AnsiConsole.Markup("  Cosmos.Patcher -> uninstall ... ");
+            bool patcherOk = await RunAsync("dotnet", "tool uninstall -g Cosmos.Patcher");
+            AnsiConsole.MarkupLine(patcherOk ? "[green]OK[/]" : "[dim]not installed[/]");
 
-        // Uninstall templates
-        AnsiConsole.Markup("  Cosmos.Build.Templates -> uninstall ... ");
-        bool templatesOk = await RunAsync("dotnet", "new uninstall Cosmos.Build.Templates");
-        AnsiConsole.MarkupLine(templatesOk ? "[green]OK[/]" : "[dim]not installed[/]");
+            // Uninstall templates
+            AnsiConsole.Markup("  Cosmos.Build.Templates -> uninstall ... ");
+            bool templatesOk = await RunAsync("dotnet", "new uninstall Cosmos.Build.Templates");
+            AnsiConsole.MarkupLine(templatesOk ? "[green]OK[/]" : "[dim]not installed[/]");
 
-        // Uninstall VS Code extension
-        AnsiConsole.Markup("  VS Code extension -> uninstall ... ");
-        bool vsCodeOk = await UninstallVSCodeExtensionAsync();
-        AnsiConsole.MarkupLine(vsCodeOk ? "[green]OK[/]" : "[dim]not found[/]");
+            // Uninstall VS Code extension
+            AnsiConsole.Markup("  VS Code extension -> uninstall ... ");
+            bool vsCodeOk = await UninstallVSCodeExtensionAsync();
+            AnsiConsole.MarkupLine(vsCodeOk ? "[green]OK[/]" : "[dim]not found[/]");
+        }
 
         // Cosmos.Tools uninstalls itself last — print instruction
         AnsiConsole.WriteLine();

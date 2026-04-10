@@ -1,12 +1,12 @@
-name: Build Cosmos Packages
+name: Kernel Setup
 
 on:
   workflow_call:
 
 jobs:
   build:
-    name: Build Cosmos Packages
-    runs-on: ubuntu-latest
+    name: Build Cosmos Packages & Cache Tools
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       matrix:
@@ -37,3 +37,25 @@ jobs:
           name: cosmos-packages
           path: artifacts/package/release/*.nupkg
           retention-days: 1
+
+      - name: 🔧 Install Build Tools
+        run: |
+          sudo apt-get clean
+          cosmos install --auto --tools
+
+      - name: 🔍 Verify Tools Installation
+        run: cosmos check
+
+      - name: 📦 Package build tools debs
+        run: |
+          mkdir -p build-tools-cache
+          cp /var/cache/apt/archives/*.deb build-tools-cache/ 2>/dev/null || true
+          echo "Cached $(ls build-tools-cache/*.deb 2>/dev/null | wc -l) deb packages ($(du -sh build-tools-cache/ | cut -f1))"
+
+      - name: 📤 Upload Build Tools Cache
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-tools-cache
+          path: build-tools-cache/
+          retention-days: 1
+          compression-level: 1
