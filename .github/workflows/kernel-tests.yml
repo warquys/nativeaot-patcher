@@ -8,6 +8,7 @@ on:
       - 'tests/Cosmos.TestRunner.**'
       - 'tests/Kernels/**'
       - '.github/workflows/kernel-tests.yml'
+      - '.github/workflows/kernel-setup.yml'
       - '.github/workflows/kernel-test-run.yml'
       - '.github/workflows/kernel-test-results.yml'
   pull_request:
@@ -17,6 +18,7 @@ on:
       - 'tests/Cosmos.TestRunner.**'
       - 'tests/Kernels/**'
       - '.github/workflows/kernel-tests.yml'
+      - '.github/workflows/kernel-setup.yml'
       - '.github/workflows/kernel-test-run.yml'
       - '.github/workflows/kernel-test-results.yml'
   workflow_dispatch:
@@ -252,7 +254,7 @@ jobs:
   # ── Summary ───────────────────────────────────────────────────────────────────
   test-summary:
     name: Test Summary
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [ helloworld-results, memory-results, typecasting-results, timer-results, network-results, runtime-results, threading-results, graphic-results, garbagecollector-results ]
     if: always()
     steps:

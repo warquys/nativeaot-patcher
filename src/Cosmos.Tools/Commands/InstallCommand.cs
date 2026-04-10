@@ -18,9 +18,13 @@ public class InstallSettings : CommandSettings
     [Description("Bundle all tools into DIR for offline installer packaging")]
     public string? Setup { get; set; }
 
-    [CommandOption("--skip-tools")]
-    [Description("Skip system tools installation")]
-    public bool SkipTools { get; set; }
+    [CommandOption("--tools")]
+    [Description("Only install system tools (QEMU, lld, xorriso, yasm, cross-compilers)")]
+    public bool Tools { get; set; }
+
+    [CommandOption("--packages")]
+    [Description("Only install Cosmos dotnet tools, templates, and VS Code extension")]
+    public bool Packages { get; set; }
 }
 
 public class InstallCommand : AsyncCommand<InstallSettings>
@@ -54,8 +58,12 @@ public class InstallCommand : AsyncCommand<InstallSettings>
 
     private static async Task<int> InstallLocallyAsync(InstallSettings settings)
     {
+        // When neither --tools nor --packages is specified, install everything
+        bool installTools = !settings.Packages || settings.Tools;
+        bool installPackages = !settings.Tools || settings.Packages;
+
         // Install system tools
-        if (!settings.SkipTools)
+        if (installTools)
         {
             string packageManager = PlatformInfo.GetPackageManager();
             var processed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -157,11 +165,14 @@ public class InstallCommand : AsyncCommand<InstallSettings>
             await PropagateToolPathsForCIAsync();
         }
 
-        // Install dotnet tools and templates
-        await InstallDotnetToolsAsync();
+        if (installPackages)
+        {
+            // Install dotnet tools and templates
+            await InstallDotnetToolsAsync();
 
-        // Install VS Code extension
-        await InstallVSCodeExtensionAsync();
+            // Install VS Code extension
+            await InstallVSCodeExtensionAsync();
+        }
 
         AnsiConsole.WriteLine();
         AnsiConsole.WriteLine("  " + new string('-', 50));
