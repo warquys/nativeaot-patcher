@@ -66,6 +66,18 @@ jobs:
           name: cosmos-packages
           path: artifacts/package/release
 
+      - name: 🔄 Sync global.json with built packages
+        run: |
+          # Extract the actual version from the built Cosmos.Sdk package
+          PKG_VERSION=$(ls artifacts/package/release/Cosmos.Sdk.*.nupkg | sed -nE 's/.*Cosmos\.Sdk\.([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)\.nupkg/\1/p' | head -n1)
+          if [ -n "$PKG_VERSION" ]; then
+            echo "Syncing global.json Cosmos.Sdk version to: $PKG_VERSION"
+            sed -i -E "s|(\"Cosmos\.Sdk\"[[:space:]]*:[[:space:]]*\")[^\"]+(\")|\1${PKG_VERSION}\2|" global.json
+            cat global.json
+          else
+            echo "WARNING: Could not determine package version from artifacts"
+          fi
+
       - name: 📦 Configure NuGet Local Source
         run: |
           dotnet nuget locals all --clear
