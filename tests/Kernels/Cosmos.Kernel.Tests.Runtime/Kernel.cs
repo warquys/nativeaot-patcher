@@ -103,7 +103,7 @@
 // │ ----- GC & Finalization ------------------------- │     │    │     │      │       │      │      │
 // │ RhGetGCDescSize                                   │ GC  │  1 │   1 │ real │   1   │  50  │ 100  │
 // │ RhGetGeneration                                   │ GC  │  1 │   1 │ stub │   1   │  33  │ 100  │
-// │ RhGetMemoryInfo                                   │ Std │  1 │   0 │ stub │   1   │  33  │  50  │
+// │ RhGetMemoryInfo                                   │ GC  │  2 │   0 │ real │   1   │  33  │  50  │
 // │ RhpGcPoll                                         │ Std │  0 │   0 │ stub │   1   │  —   │  50  │
 // │ RhpNewFinalizable                                 │ Std │  1 │   1 │ real │   1   │  33  │ 100  │
 // │ RhpTrapThreads                                    │ Std │  0 │   0 │ stub │   1   │  —   │  50  │
@@ -1105,7 +1105,8 @@ public unsafe class Kernel : Sys.Kernel
     // -- RhGetMemoryInfo --
     private static void Test_RhGetMemoryInfo_Smoke()
     {
-        StartupCodeHelpers.RhGetMemoryInfo(nint.Zero);
+        byte[] buffer = new byte[512];
+        RuntimeGC.RhGetMemoryInfo(ref buffer[0], GCKind.Any);
         Assert.True(true, "RhGetMemoryInfo returned without crashing");
     }
 
