@@ -205,6 +205,29 @@ jobs:
       event_name: ${{ github.event_name }}
       head_ref: ${{ github.head_ref || github.ref_name }}
 
+  # ── Math ─────────────────────────────────────────────────────────────────────
+  math-tests:
+    needs: setup
+    uses: ./.github/workflows/kernel-test-run.yml
+    with:
+      suite_name: Math
+      suite_id: math
+      kernel_path: tests/Kernels/Cosmos.Kernel.Tests.Math
+      timeout_x64: 120
+      timeout_arm64: 180
+      step_timeout_minutes: 10
+
+  math-results:
+    needs: math-tests
+    if: always()
+    uses: ./.github/workflows/kernel-test-results.yml
+    with:
+      suite_name: Math
+      suite_id: math
+      kernel_path: tests/Kernels/Cosmos.Kernel.Tests.Math
+      event_name: ${{ github.event_name }}
+      head_ref: ${{ github.head_ref || github.ref_name }}
+
   # ── Graphic ───────────────────────────────────────────────────────────────────
   graphic-tests:
     needs: setup
@@ -232,7 +255,7 @@ jobs:
   test-summary:
     name: Test Summary
     runs-on: ubuntu-24.04
-    needs: [ helloworld-results, memory-results, typecasting-results, timer-results, network-results, runtime-results, threading-results, graphic-results ]
+    needs: [ helloworld-results, memory-results, typecasting-results, timer-results, network-results, runtime-results, threading-results, math-results, graphic-results ]
     if: always()
     steps:
       - name: 📊 Generate Summary
@@ -259,6 +282,7 @@ jobs:
           add_row "Network"     "${{ needs.network-tests.result }}"
           add_row "Runtime"     "${{ needs.runtime-tests.result }}"
           add_row "Threading"   "${{ needs.threading-tests.result }}"
+          add_row "Math"        "${{ needs.math-tests.result }}"
           add_row "Graphic"     "${{ needs.graphic-tests.result }}"
 
           echo "" >> $GITHUB_STEP_SUMMARY
