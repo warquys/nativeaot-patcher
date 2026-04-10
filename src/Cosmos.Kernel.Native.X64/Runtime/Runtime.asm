@@ -123,14 +123,17 @@ tan:
 
 ; double asin(double x)
 ; asin(x) = fpatan(x, sqrt(1 - x*x))
-; fpatan computes atan2(ST1, ST0)
-; We want atan2(x, sqrt(1-x*x))  => ST1=x, ST0=sqrt(1-x*x)
-; So load sqrt first, then x
 asin:
+    ; x == 0 -> return 0 exactly
+    xorpd xmm1, xmm1
+    ucomisd xmm0, xmm1
+    jne .asin_compute
+    jp .asin_compute
+    ret                             ; xmm0 already 0
+.asin_compute:
     sub rsp, 24
-    movsd [rsp], xmm0              ; save x
+    movsd [rsp], xmm0
 
-    ; compute sqrt(1 - x*x) in xmm
     movsd xmm1, xmm0
     mulsd xmm1, xmm1               ; x*x
     movsd xmm2, [rel __math_one]
@@ -138,7 +141,6 @@ asin:
     sqrtsd xmm2, xmm2              ; sqrt(1 - x*x)
     movsd [rsp+8], xmm2
 
-    ; FPU: ST0=sqrt(1-x*x), then push x => ST0=x, ST1=sqrt(1-x*x)
     fld qword [rsp+8]              ; ST0 = sqrt(1-x*x)
     fld qword [rsp]                ; ST0 = x, ST1 = sqrt(1-x*x)
     fpatan                          ; atan2(x, sqrt(1-x*x)) = asin(x)
@@ -149,14 +151,17 @@ asin:
 
 ; double acos(double x)
 ; acos(x) = fpatan(sqrt(1 - x*x), x)
-; fpatan computes atan2(ST1, ST0)
-; We want atan2(sqrt(1-x*x), x) => ST1=sqrt(1-x*x), ST0=x
-; So load x first, then sqrt
 acos:
+    ; x == 1.0 -> return 0 exactly
+    ucomisd xmm0, [rel __math_one]
+    jne .acos_compute
+    jp .acos_compute
+    xorpd xmm0, xmm0
+    ret
+.acos_compute:
     sub rsp, 24
-    movsd [rsp], xmm0              ; save x
+    movsd [rsp], xmm0
 
-    ; compute sqrt(1 - x*x)
     movsd xmm1, xmm0
     mulsd xmm1, xmm1
     movsd xmm2, [rel __math_one]
@@ -164,7 +169,6 @@ acos:
     sqrtsd xmm2, xmm2
     movsd [rsp+8], xmm2
 
-    ; FPU: ST0=x, then push sqrt => ST0=sqrt(1-x*x), ST1=x
     fld qword [rsp]                ; ST0 = x
     fld qword [rsp+8]              ; ST0 = sqrt(1-x*x), ST1 = x
     fpatan                          ; atan2(sqrt(1-x*x), x) = acos(x)
@@ -175,8 +179,14 @@ acos:
 
 ; double atan(double x)
 ; atan(x) = fpatan(x, 1.0) = atan2(x, 1)
-; ST1=x, ST0=1.0
 atan:
+    ; x == 0 -> return 0 exactly
+    xorpd xmm1, xmm1
+    ucomisd xmm0, xmm1
+    jne .atan_compute
+    jp .atan_compute
+    ret
+.atan_compute:
     sub rsp, 8
     movsd [rsp], xmm0
     fld1                            ; ST0 = 1.0
@@ -189,9 +199,18 @@ atan:
 
 ; double atan2(double y, double x)
 ; xmm0 = y, xmm1 = x
-; fpatan: atan2(ST1, ST0)
-; We want atan2(y, x) => ST1=y, ST0=x
 atan2:
+    ; y == 0 && x > 0 -> return 0 exactly
+    xorpd xmm2, xmm2
+    ucomisd xmm0, xmm2
+    jne .atan2_compute
+    jp .atan2_compute
+    ; y == 0
+    ucomisd xmm1, xmm2
+    jbe .atan2_compute              ; x <= 0, need real computation
+    xorpd xmm0, xmm0
+    ret
+.atan2_compute:
     sub rsp, 16
     movsd [rsp], xmm1              ; x
     movsd [rsp+8], xmm0            ; y
@@ -206,6 +225,14 @@ atan2:
 ; double exp(double x)
 ; exp(x) = 2^(x * log2(e))
 exp:
+    ; Check NaN/Inf
+    movq rax, xmm0
+    mov rcx, rax
+    shr rcx, 52
+    and ecx, 0x7FF
+    cmp ecx, 0x7FF
+    je .exp_special
+
     sub rsp, 8
     movsd [rsp], xmm0
     fld qword [rsp]                ; ST0 = x
@@ -225,6 +252,26 @@ exp:
     fstp qword [rsp]
     movsd xmm0, [rsp]
     add rsp, 8
+    ret
+
+.exp_special:
+    ; rax has the original bits
+    bt rax, 63                      ; check sign bit
+    jc .exp_neg_inf
+    ; +Inf or NaN: check mantissa
+    mov rcx, rax
+    shl rcx, 12                     ; shift out sign+exponent
+    test rcx, rcx
+    jnz .exp_nan                    ; non-zero mantissa = NaN
+    ; +Inf -> +Inf
+    movsd xmm0, [rel __math_pos_inf]
+    ret
+.exp_neg_inf:
+    ; -Inf -> 0
+    xorpd xmm0, xmm0
+    ret
+.exp_nan:
+    movsd xmm0, [rel __math_nan]
     ret
 
 ; double log(double x) -- natural log
@@ -286,6 +333,12 @@ pow:
     ret
 
 .pow_nonzero_exp:
+    ; x == +Inf -> return +Inf (for y > 0)
+    movq rax, xmm0
+    mov rcx, 0x7FF0000000000000
+    cmp rax, rcx
+    je .pow_inf_base
+
     ; x == 0
     ucomisd xmm0, xmm2
     jne .pow_nonzero_base
@@ -360,6 +413,18 @@ pow:
     fstp st1
     fstp qword [rsp]
     movsd xmm0, [rsp]
+    add rsp, 16
+    ret
+
+.pow_inf_base:
+    ; x == +Inf: y > 0 -> +Inf, y < 0 -> 0
+    ucomisd xmm1, xmm2
+    ja .pow_ret_pos_inf
+    xorpd xmm0, xmm0
+    add rsp, 16
+    ret
+.pow_ret_pos_inf:
+    movsd xmm0, [rel __math_pos_inf]
     add rsp, 16
     ret
 
