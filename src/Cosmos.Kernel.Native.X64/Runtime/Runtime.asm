@@ -1,5 +1,9 @@
 ; x64 NativeAOT Runtime Stubs
-; EH section accessors
+; EH section accessors and core math functions (x87 FPU)
+;
+; Core transcendentals (sin, cos, tan, exp, log, atan) use x87 hardware.
+; Derived functions (asin, acos, atan2, pow, log2, log10) are shared C#
+; implementations in Cosmos.Kernel.Core/Runtime/Math.cs.
 
 global get_eh_frame_start
 global get_eh_frame_end
@@ -11,50 +15,62 @@ extern __eh_frame_end
 extern __dotnet_eh_table_start
 extern __dotnet_eh_table_end
 
+; core double math (x87 FPU)
 global cos
 global sin
 global tan
-global pow
+global atan
+global exp
+global log
+
+; core float math wrappers
+global cosf
+global sinf
+global tanf
+global expf
+global logf
 
 section .text
 
-; void* get_eh_frame_start(void)
-; Returns pointer to start of .eh_frame section
+; =============================================================================
+; EH section accessors
+; =============================================================================
+
 get_eh_frame_start:
     lea rax, [rel __eh_frame_start]
     ret
 
-; void* get_eh_frame_end(void)
-; Returns pointer to end of .eh_frame section
 get_eh_frame_end:
     lea rax, [rel __eh_frame_end]
     ret
 
-; void* get_dotnet_eh_table_start(void)
-; Returns pointer to start of .dotnet_eh_table section
 get_dotnet_eh_table_start:
     lea rax, [rel __dotnet_eh_table_start]
     ret
 
-; void* get_dotnet_eh_table_end(void)
-; Returns pointer to end of .dotnet_eh_table section
 get_dotnet_eh_table_end:
     lea rax, [rel __dotnet_eh_table_end]
     ret
 
-; double cos(double x)
-cos:
-    sub rsp, 8
-    movsd [rsp], xmm0
-    fld qword [rsp]
-    fcos
-    fstp qword [rsp]
-    movsd xmm0, [rsp]
-    add rsp, 8
+; =============================================================================
+; Helper: check if xmm0 is NaN or Inf (exponent == 0x7FF)
+; Sets ZF if NaN/Inf. Trashes rax.
+; =============================================================================
+__check_nan_inf:
+    movq rax, xmm0
+    shr rax, 52
+    and eax, 0x7FF
+    cmp eax, 0x7FF
     ret
+
+; =============================================================================
+; Double-precision math (x87 FPU)
+; =============================================================================
 
 ; double sin(double x)
 sin:
+    call __check_nan_inf
+    je .sin_nan
     sub rsp, 8
     movsd [rsp], xmm0
     fld qword [rsp]
@@ -63,22 +79,173 @@ sin:
     movsd xmm0, [rsp]
     add rsp, 8
     ret
+.sin_nan:
+    movsd xmm0, [rel __math_nan]
+    ret
+
+; double cos(double x)
+cos:
+    call __check_nan_inf
+    je .cos_nan
+    sub rsp, 8
+    movsd [rsp], xmm0
+    fld qword [rsp]
+    fcos
+    fstp qword [rsp]
+    movsd xmm0, [rsp]
+    add rsp, 8
+    ret
+.cos_nan:
+    movsd xmm0, [rel __math_nan]
+    ret
 
 ; double tan(double x)
-
 tan:
+    call __check_nan_inf
+    je .tan_nan
     sub rsp, 8
     movsd [rsp], xmm0
     fld qword [rsp]
     fptan
-    fstp st0        ; fptan pushes 1.0, we pop it to leave just the result
+    fstp st0            ; pop the 1.0 fptan pushes
+    fstp qword [rsp]
+    movsd xmm0, [rsp]
+    add rsp, 8
+    ret
+.tan_nan:
+    movsd xmm0, [rel __math_nan]
+    ret
+
+; double atan(double x)
+; atan(x) = fpatan(x, 1.0) = atan2(x, 1)
+atan:
+    ; x == 0 -> return 0 exactly
+    xorpd xmm1, xmm1
+    ucomisd xmm0, xmm1
+    jne .atan_compute
+    jp .atan_compute
+    ret
+.atan_compute:
+    sub rsp, 8
+    movsd [rsp], xmm0
+    fld qword [rsp]                ; ST0 = x
+    fld1                            ; ST0 = 1.0, ST1 = x
+    fpatan                          ; atan2(ST1, ST0) = atan2(x, 1.0) = atan(x)
     fstp qword [rsp]
     movsd xmm0, [rsp]
     add rsp, 8
     ret
 
-; double pow(double x, double y)
-pow:
-    ; Stub: returns x for now (or 0)
-    ; Real implementation requires complex log/exp logic
+; double exp(double x)
+; exp(x) = 2^(x * log2(e))
+exp:
+    ; Check NaN/Inf
+    movq rax, xmm0
+    mov rcx, rax
+    shr rcx, 52
+    and ecx, 0x7FF
+    cmp ecx, 0x7FF
+    je .exp_special
+
+    sub rsp, 8
+    movsd [rsp], xmm0
+    fld qword [rsp]                ; ST0 = x
+    fldl2e                          ; ST0 = log2(e), ST1 = x
+    fmulp                           ; ST0 = x * log2(e)
+
+    ; 2^ST0: split into int + frac
+    fld st0                         ; dup
+    frndint                         ; ST0 = int part
+    fsub st1, st0                   ; ST1 = frac part
+    fxch st1                        ; ST0 = frac, ST1 = int
+    f2xm1                           ; ST0 = 2^frac - 1
+    fld1
+    faddp                           ; ST0 = 2^frac
+    fscale                          ; ST0 = 2^frac * 2^int = exp(x)
+    fstp st1                        ; pop int
+    fstp qword [rsp]
+    movsd xmm0, [rsp]
+    add rsp, 8
     ret
+
+.exp_special:
+    ; rax has the original bits
+    bt rax, 63                      ; check sign bit
+    jc .exp_neg_inf
+    ; +Inf or NaN: check mantissa
+    mov rcx, rax
+    shl rcx, 12                     ; shift out sign+exponent
+    test rcx, rcx
+    jnz .exp_nan                    ; non-zero mantissa = NaN
+    ; +Inf -> +Inf
+    movsd xmm0, [rel __math_pos_inf]
+    ret
+.exp_neg_inf:
+    ; -Inf -> 0
+    xorpd xmm0, xmm0
+    ret
+.exp_nan:
+    movsd xmm0, [rel __math_nan]
+    ret
+
+; double log(double x) -- natural log
+; log(x) = ln(2) * log2(x)
+log:
+    sub rsp, 8
+    movsd [rsp], xmm0
+    fld1
+    fld qword [rsp]
+    fyl2x                           ; log2(x)
+    fldln2                          ; ln(2)
+    fmulp                           ; ln(2) * log2(x) = ln(x)
+    fstp qword [rsp]
+    movsd xmm0, [rsp]
+    add rsp, 8
+    ret
+
+; =============================================================================
+; Single-precision float wrappers (promote -> call double -> demote)
+; =============================================================================
+
+sinf:
+    cvtss2sd xmm0, xmm0
+    call sin
+    cvtsd2ss xmm0, xmm0
+    ret
+
+cosf:
+    cvtss2sd xmm0, xmm0
+    call cos
+    cvtsd2ss xmm0, xmm0
+    ret
+
+tanf:
+    cvtss2sd xmm0, xmm0
+    call tan
+    cvtsd2ss xmm0, xmm0
+    ret
+
+expf:
+    cvtss2sd xmm0, xmm0
+    call exp
+    cvtsd2ss xmm0, xmm0
+    ret
+
+logf:
+    cvtss2sd xmm0, xmm0
+    call log
+    cvtsd2ss xmm0, xmm0
+    ret
+
+; =============================================================================
+; Derived math functions (asin, acos, atan2, pow, log2, log10) are now
+; shared C# implementations in Cosmos.Kernel.Core/Runtime/Math.cs.
+; =============================================================================
+
+; =============================================================================
+; Constants
+; =============================================================================
+section .rodata
+align 16
+__math_nan:       dq 0x7FF8000000000000
+__math_pos_inf:   dq 0x7FF0000000000000

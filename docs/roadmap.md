@@ -11,11 +11,11 @@
 | Driver support | ✅ | ✅ | PCI and MMIO |
 | Garbage Collection | ✅ | ✅ | Mark-and-sweep GC |
 | Filesystem | ✅ | 🟡 In progress |  |
-| .NET core library features | 🟡 | 🟡 Partial | Core types work (String, Collections, List, Dictionary). Console, DateTime, Random, BitOperations plugged. Missing: `System.Math` (Sin/Cos/Tan/Log/Exp/Pow), `System.IO.File`. |
+| .NET core library features | 🟡 | 🟡 Partial | Core types work (String, Collections, List, Dictionary). Math, Console, DateTime, Random, BitOperations plugged. Missing: `System.IO.File`. |
 | Plug system | ✅ | ✅  |  |
 | Test Framework | ✅ | ✅  |  |
 | Debugger| ✅ | 🟡 Partial | Source link + variables bugs in vscode |
-| CPU/FPU accelerated math | ✅ | 🟡 Minimal | No hardware FPU math, no `System.Math` plug. |
+| CPU/FPU accelerated math | ✅ | ✅ | x64 only: x87 FPU (sin/cos/tan/exp/log/atan) |
 | Cosmos Graphic Subsystem | ✅ | ✅ | UEFI GOP framebuffer via Limine only. |
 | Network interface | ✅ | ✅ | |
 | Timer / Clock | ✅ | ✅ | |
