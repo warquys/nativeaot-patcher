@@ -31,12 +31,6 @@ public static unsafe partial class GarbageCollector
     {
         get
         {
-            if (!s_initialized)
-            {
-                return null!; // the GC configs variables are available only after GC initialization
-            }
-
-            // const define for now
             return new Dictionary<string, object>()
             {
                 // "Whether we should be using Server GC"
@@ -123,6 +117,12 @@ public static unsafe partial class GarbageCollector
             heapSize += (ulong)(seg->Bump - seg->Start);
         }
 
+        // Include pinned segments
+        for (GCSegment* seg = s_pinnedSegments; seg != null; seg = seg->Next)
+        {
+            heapSize += (ulong)(seg->Bump - seg->Start);
+        }
+
         return heapSize;
     }
 
@@ -136,7 +136,8 @@ public static unsafe partial class GarbageCollector
         ulong committedGcSegments = 0;
         for (GCSegment* seg = s_segments; seg != null; seg = seg->Next)
         {
-            committedGcSegments += seg->TotalSize;
+            // Include the segment header to match dotnet's accumulate_committed_bytes behavior
+            committedGcSegments += seg->TotalSize + Align((uint)sizeof(GCSegment));
         }
 
         return committedGcSegments;
@@ -173,12 +174,14 @@ public static unsafe partial class GarbageCollector
             return 0;
         }
 
-        ulong pinned = 0;
+        ulong pinned = s_pinnedHeapObjectCount;
+
+        // Also count GC handles of type Pinned
         if (s_handlerStore != null)
         {
             int size = (int)(s_handlerStore->End - s_handlerStore->Bump) / sizeof(GCHandle);
             var handles = new Span<GCHandle>(s_handlerStore->Bump, size);
-            foreach (var handle in handles)
+            foreach (GCHandle handle in handles)
             {
                 if ((IntPtr)handle.obj == IntPtr.Zero)
                 {
@@ -204,10 +207,10 @@ public static unsafe partial class GarbageCollector
 
         ulong totalCommitted = GetCommittedGcSegmentsBytes();
 
-        // Pinned segments
+        // Pinned segments (include header)
         for (GCSegment* seg = s_pinnedSegments; seg != null; seg = seg->Next)
         {
-            totalCommitted += seg->TotalSize;
+            totalCommitted += seg->TotalSize + Align((uint)sizeof(GCSegment));
         }
 
         // Frozen segments (committed size)
@@ -426,17 +429,17 @@ public static unsafe partial class GarbageCollector
     /// the current occupied range in regular GC segments.
     /// Other generations return 0.
     /// </summary>
-    public static uint GetGenerationSize(int gen)
+    public static ulong GetGenerationSize(int gen)
     {
         if (gen != 0)
         {
             return 0;
         }
 
-        uint used = 0;
+        ulong used = 0;
         for (GCSegment* seg = s_segments; seg != null; seg = seg->Next)
         {
-            used += (uint)(seg->Bump - seg->Start);
+            used += (ulong)(seg->Bump - seg->Start);
         }
 
         return used;
@@ -469,6 +472,16 @@ public static unsafe partial class GarbageCollector
         }
 
         return fragmented;
+    }
+
+    /// <summary>
+    /// Returns the cumulative total of all bytes ever allocated through the GC.
+    /// This counter only increases and never decrements, matching the semantics of
+    /// <c>GC.GetTotalAllocatedBytes()</c> in dotnet.
+    /// </summary>
+    public static ulong GetTotalAllocatedBytes()
+    {
+        return s_totalAllocatedBytes;
     }
 
     /// <summary>

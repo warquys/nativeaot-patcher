@@ -125,6 +125,7 @@ public static unsafe partial class GarbageCollector
 
                     // Clear and return
                     MemoryOp.MemSet((byte*)block, 0, (int)size);
+                    s_totalAllocatedBytes += size;
                     return block;
                 }
 
@@ -155,6 +156,7 @@ public static unsafe partial class GarbageCollector
             void* result = segment->Bump;
             segment->Bump = newBump;
             segment->UsedSize += size;
+            s_totalAllocatedBytes += size;
             s_currentSegment = segment;
             s_lastSegment = segment;
             return result;

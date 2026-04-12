@@ -247,6 +247,19 @@ public static unsafe partial class GarbageCollector
     private static ulong s_lastGen0SizeAfter;
     private static ulong s_lastGen0FragmentationAfter;
 
+    /// <summary>
+    /// Cumulative total of all bytes ever allocated through the GC.
+    /// Increments on every allocation, never decrements.
+    /// Used by <c>RhGetTotalAllocatedBytes</c> / <c>GC.GetTotalAllocatedBytes()</c>.
+    /// </summary>
+    private static ulong s_totalAllocatedBytes;
+
+    /// <summary>
+    /// Number of live objects currently on the pinned object heap.
+    /// Incremented on pinned allocation, decremented on pinned sweep free.
+    /// </summary>
+    private static ulong s_pinnedHeapObjectCount;
+
     // --- Properties ---
 
     /// <summary>

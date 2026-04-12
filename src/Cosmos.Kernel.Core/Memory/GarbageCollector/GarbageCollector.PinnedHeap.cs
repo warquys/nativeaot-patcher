@@ -117,6 +117,8 @@ public static unsafe partial class GarbageCollector
             void* result = segment->Bump;
             segment->Bump = newBump;
             segment->UsedSize += size;
+            s_totalAllocatedBytes += size;
+            s_pinnedHeapObjectCount++;
             return result;
         }
 
@@ -235,6 +237,11 @@ public static unsafe partial class GarbageCollector
             {
                 // Dead pinned object - add to free run
                 freed++;
+                if (s_pinnedHeapObjectCount > 0)
+                {
+                    s_pinnedHeapObjectCount--;
+                }
+
                 if (freeRunStart == null)
                 {
                     freeRunStart = ptr;

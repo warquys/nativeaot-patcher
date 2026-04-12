@@ -559,18 +559,19 @@ public class Kernel : Sys.Kernel
 
     private static void TestGCInfoGenerationSizeAndFragmentation()
     {
-        // Gen 0 size must match the truncated heap size — both iterate s_segments identically.
-        uint gen0Size = CoreGC.GetGenerationSize(0);
-        Assert.True(gen0Size == (uint)CoreGC.GetHeapSizeBytes(),
-            "GC.Info: GetGenerationSize(0) must match GetHeapSizeBytes");
-        Assert.True(gen0Size > 0u, "GC.Info: gen0 size must be > 0");
+        // Gen 0 size covers regular segments only; heap size includes pinned segments too.
+        ulong gen0Size = CoreGC.GetGenerationSize(0);
+        ulong heapSize = CoreGC.GetHeapSizeBytes();
+        Assert.True(gen0Size > 0UL, "GC.Info: gen0 size must be > 0");
+        Assert.True(gen0Size <= heapSize,
+            "GC.Info: GetGenerationSize(0) must be <= GetHeapSizeBytes (heap includes pinned)");
 
         // Non-generational GC: any non-zero generation reports 0.
-        Assert.Equal(0u, CoreGC.GetGenerationSize(1),
+        Assert.Equal(0UL, CoreGC.GetGenerationSize(1),
             "GC.Info: gen1 size must be 0");
-        Assert.Equal(0u, CoreGC.GetGenerationSize(2),
+        Assert.Equal(0UL, CoreGC.GetGenerationSize(2),
             "GC.Info: gen2 size must be 0");
-        Assert.Equal(0u, CoreGC.GetGenerationSize(-1),
+        Assert.Equal(0UL, CoreGC.GetGenerationSize(-1),
             "GC.Info: invalid generation index must return 0");
 
         // GetCurrentFragmentation(0) must agree with GetFragmentedBytes; other gens return 0.

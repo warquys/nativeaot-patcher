@@ -98,7 +98,7 @@ internal static unsafe class GC
     }
 
     [RuntimeExport("RhGetGcTotalMemory")]
-    static long RhGetGcTotalMemory()
+    internal static long RhGetGcTotalMemory()
     {
         ulong heapBytes = GarbageCollector.GetHeapSizeBytes();
         if (heapBytes > long.MaxValue)
@@ -128,7 +128,7 @@ internal static unsafe class GC
     {
         // Our GC is currently non-generational. Delegate to the GC helper which
         // returns the total used bytes for generation 0 and 0 for others.
-        uint size = GarbageCollector.GetGenerationSize(gen);
+        ulong size = GarbageCollector.GetGenerationSize(gen);
         if (size > int.MaxValue)
         {
             return int.MaxValue;
@@ -199,13 +199,20 @@ internal static unsafe class GC
     [RuntimeExport("RhGetTotalAllocatedBytes")]
     internal static long RhGetTotalAllocatedBytes()
     {
-        ulong allocated = GarbageCollector.GetTotalCommittedBytes();
+        ulong allocated = GarbageCollector.GetTotalAllocatedBytes();
         if (allocated > long.MaxValue)
         {
             return long.MaxValue;
         }
 
         return (long)allocated;
+    }
+
+    [RuntimeExport("RhGetTotalAllocatedBytesPrecise")]
+    internal static long RhGetTotalAllocatedBytesPrecise()
+    {
+        // Without per-thread allocation contexts, the result is already precise.
+        return RhGetTotalAllocatedBytes();
     }
 
     [RuntimeExport("RhRegisterForGCReporting")]

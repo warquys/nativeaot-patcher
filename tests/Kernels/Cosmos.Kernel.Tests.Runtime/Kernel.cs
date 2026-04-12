@@ -39,10 +39,10 @@
 //            100%  = every return value / out param / buffer state asserted against expected
 //
 // Summary:
-//   108 runtime exports implemented in src/Cosmos.Kernel.Core/Runtime/
-//    92 tests written in this file, covering 84 distinct endpoints (77%)
-//    24 implemented endpoints are intentionally NOT directly tested (notes below)
-//    77 endpoints expected by the dotnet NativeAOT CoreLib are NOT implemented
+//   120 runtime exports implemented in src/Cosmos.Kernel.Core/Runtime/
+//   103 tests written in this file, covering 95 distinct endpoints (79%)
+//    25 implemented endpoints are intentionally NOT directly tested (notes below)
+//    66 endpoints expected by the dotnet NativeAOT CoreLib are NOT implemented
 //
 // ┌───────────────────────────────────────────────────┬─────┬────┬─────┬──────┬───────┬──────┬──────┐
 // │ Endpoint                                          │File │ In │ Out │ Impl │ Tests │ In%  │ Out% │
@@ -101,9 +101,20 @@
 // │ RhpDbl2Lng                                        │ Std │  1 │   1 │ real │   1   │  67  │ 100  │
 // │ sqrt                                              │ Mth │  1 │   1 │ real │   1   │ 100  │ 100  │
 // │ ----- GC & Finalization ------------------------- │     │    │     │      │       │      │      │
+// │ RhCollect                                         │ GC  │  2 │   0 │ real │   1   │  33  │  50  │
+// │ RhGetAllocatedBytesForCurrentThread               │ GC  │  0 │   1 │ stub │   1   │  —   │ 100  │
+// │ RhGetGcCollectionCount                            │ GC  │  2 │   1 │ real │   1   │  33  │ 100  │
 // │ RhGetGCDescSize                                   │ GC  │  1 │   1 │ real │   1   │  50  │ 100  │
-// │ RhGetGeneration                                   │ GC  │  1 │   1 │ stub │   1   │  33  │ 100  │
+// │ RhGetGcTotalMemory                                │ GC  │  0 │   1 │ real │   1   │  —   │ 100  │
+// │ RhGetGeneration                                   │ GC  │  1 │   1 │ real │   1   │  33  │ 100  │
+// │ RhGetGenerationSize                               │ GC  │  1 │   1 │ real │   1   │  67  │ 100  │
+// │ RhGetGCSegmentSize                                │ GC  │  0 │   1 │ real │   1   │  —   │ 100  │
+// │ RhGetLastGCPercentTimeInGC                        │ GC  │  0 │   1 │ real │   1   │  —   │ 100  │
 // │ RhGetMemoryInfo                                   │ GC  │  2 │   0 │ real │   1   │  33  │  50  │
+// │ RhGetTotalAllocatedBytes                          │ GC  │  0 │   1 │ real │   1   │  —   │ 100  │
+// │ RhGetTotalAllocatedBytesPrecise                   │ GC  │  0 │   1 │ real │   1   │  —   │ 100  │
+// │ RhIsPromoted                                      │ GC  │  1 │   1 │ stub │   1   │  33  │ 100  │
+// │ RhIsServerGc                                      │ GC  │  0 │   1 │ stub │   1   │  —   │ 100  │
 // │ RhpGcPoll                                         │ Std │  0 │   0 │ stub │   1   │  —   │  50  │
 // │ RhpNewFinalizable                                 │ Std │  1 │   1 │ real │   1   │  33  │ 100  │
 // │ RhpTrapThreads                                    │ Std │  0 │   0 │ stub │   1   │  —   │  50  │
@@ -210,15 +221,13 @@
 //   RhpFirstChanceExceptionNotification, RhpSfiInit, RhpSfiNext,
 //   RhpValidateExInfoStack, RhpGetDispatchCellInfo
 //
-// GC (full / background / server / knobs) (30):
-//   RhCancelFullGCNotification, RhCollect, RhEndNoGCRegion,
-//   RhGetAllocatedBytesForCurrentThread, RhGetCurrentObjSize,
-//   RhGetGcCollectionCount, RhGetGcLatencyMode, RhGetGCNow,
-//   RhGetGCSegmentSize, RhGetGcTotalMemory, RhGetGenerationSize,
-//   RhGetKnobValues, RhGetLastGCDuration, RhGetLastGCPercentTimeInGC,
+// GC (full / background / server / knobs) (19 — 11 now implemented):
+//   RhCancelFullGCNotification, RhEndNoGCRegion, RhGetCurrentObjSize,
+//   RhGetGcLatencyMode, RhGetGCNow,
+//   RhGetKnobValues, RhGetLastGCDuration,
 //   RhGetLastGCStartTime, RhGetLoadedOSModules, RhGetLohCompactionMode,
-//   RhGetMaxGcGeneration, RhGetTotalAllocatedBytes, RhGetTotalPauseDuration,
-//   RhIsGCBridgeActive, RhIsPromoted, RhIsServerGc, RhpGetNextFinalizableObject,
+//   RhGetMaxGcGeneration, RhGetTotalPauseDuration,
+//   RhIsGCBridgeActive, RhpGetNextFinalizableObject,
 //   RhpInitializeGcStress, RhRegisterForFullGCNotification, RhRegisterGcCallout,
 //   RhSetGcLatencyMode, RhSetLohCompactionMode, RhStartNoGCRegion,
 //   RhUnregisterGcCallout, RhWaitForFullGCApproach, RhWaitForFullGCComplete
@@ -238,8 +247,8 @@
 // Allocation variants (4):
 //   RhpNewArrayFastAlign8, RhpNewFastAlign8, RhpNewFastMisalign, RhpNewFinalizableAlign8
 //
-// Handles / Ref-counted / Objective-C / Cross-reference (6):
-//   RhHandleGet, RhHandleTryGetCrossReferenceContext, RhpHandleAllocCrossReference,
+// Handles / Ref-counted / Objective-C / Cross-reference (5 — RhHandleGet now implemented):
+//   RhHandleTryGetCrossReferenceContext, RhpHandleAllocCrossReference,
 //   RhRegisterObjectiveCMarshalBeginEndCallback, RhRegisterRefCountedHandleCallback,
 //   RhUnregisterRefCountedHandleCallback
 //
@@ -272,7 +281,7 @@ public unsafe class Kernel : Sys.Kernel
         Serial.WriteString("[Runtime] BeforeRun() reached!\n");
         Serial.WriteString("[Runtime] Starting tests...\n");
 
-        TR.Start("Runtime Tests", expectedTests: 92);
+        TR.Start("Runtime Tests", expectedTests: 103);
 
         // ==================== Memory Allocation Stubs ====================
         // -- memmove --
@@ -384,12 +393,34 @@ public unsafe class Kernel : Sys.Kernel
         TR.Run("RhpDbl2Lng_Truncates", Test_RhpDbl2Lng_Truncates);
 
         // ==================== GC & Finalization Stubs ====================
+        // -- RhCollect --
+        TR.Run("RhCollect_Smoke", Test_RhCollect_Smoke);
+        // -- RhGetAllocatedBytesForCurrentThread --
+        TR.Run("RhGetAllocatedBytesForCurrentThread_ReturnsZero", Test_RhGetAllocatedBytesForCurrentThread_ReturnsZero);
+        // -- RhGetGcCollectionCount --
+        TR.Run("RhGetGcCollectionCount_Gen0_NonNegative", Test_RhGetGcCollectionCount_Gen0_NonNegative);
         // -- RhGetGCDescSize --
         TR.Run("RhGetGCDescSize_NoGCPointers_Zero", Test_RhGetGCDescSize_NoGCPointers_Zero);
+        // -- RhGetGcTotalMemory --
+        TR.Run("RhGetGcTotalMemory_Positive", Test_RhGetGcTotalMemory_Positive);
         // -- RhGetGeneration --
         TR.Run("RhGetGeneration_ReturnsZero", Test_RhGetGeneration_ReturnsZero);
+        // -- RhGetGenerationSize --
+        TR.Run("RhGetGenerationSize_Gen0_Positive", Test_RhGetGenerationSize_Gen0_Positive);
+        // -- RhGetGCSegmentSize --
+        TR.Run("RhGetGCSegmentSize_Positive", Test_RhGetGCSegmentSize_Positive);
+        // -- RhGetLastGCPercentTimeInGC --
+        TR.Run("RhGetLastGCPercentTimeInGC_InRange", Test_RhGetLastGCPercentTimeInGC_InRange);
         // -- RhGetMemoryInfo --
         TR.Run("RhGetMemoryInfo_Smoke", Test_RhGetMemoryInfo_Smoke);
+        // -- RhGetTotalAllocatedBytes --
+        TR.Run("RhGetTotalAllocatedBytes_Positive", Test_RhGetTotalAllocatedBytes_Positive);
+        // -- RhGetTotalAllocatedBytesPrecise --
+        TR.Run("RhGetTotalAllocatedBytesPrecise_MatchesNonPrecise", Test_RhGetTotalAllocatedBytesPrecise_MatchesNonPrecise);
+        // -- RhIsPromoted --
+        TR.Run("RhIsPromoted_ReturnsFalse", Test_RhIsPromoted_ReturnsFalse);
+        // -- RhIsServerGc --
+        TR.Run("RhIsServerGc_ReturnsFalse", Test_RhIsServerGc_ReturnsFalse);
         // -- RhpGcPoll --
         TR.Run("RhpGcPoll_Smoke", Test_RhpGcPoll_Smoke);
         // -- RhpNewFinalizable --
@@ -1087,6 +1118,27 @@ public unsafe class Kernel : Sys.Kernel
     // GC & Finalization Stubs
     // =============================================================================
 
+    // -- RhCollect --
+    private static void Test_RhCollect_Smoke()
+    {
+        RuntimeGC.RhCollect(0, default);
+        Assert.True(true, "RhCollect returned without crashing");
+    }
+
+    // -- RhGetAllocatedBytesForCurrentThread --
+    private static void Test_RhGetAllocatedBytesForCurrentThread_ReturnsZero()
+    {
+        long result = RuntimeGC.RhGetAllocatedBytesForCurrentThread();
+        Assert.Equal(0L, result, "RhGetAllocatedBytesForCurrentThread must return 0 (not tracked)");
+    }
+
+    // -- RhGetGcCollectionCount --
+    private static void Test_RhGetGcCollectionCount_Gen0_NonNegative()
+    {
+        int count = RuntimeGC.RhGetGcCollectionCount(0, false);
+        Assert.True(count >= 0, "RhGetGcCollectionCount(gen0) must be >= 0");
+    }
+
     // -- RhGetGCDescSize --
     private static void Test_RhGetGCDescSize_NoGCPointers_Zero()
     {
@@ -1094,12 +1146,42 @@ public unsafe class Kernel : Sys.Kernel
         Assert.Equal(0, size, "RhGetGCDescSize on non-GC type must return 0");
     }
 
+    // -- RhGetGcTotalMemory --
+    private static void Test_RhGetGcTotalMemory_Positive()
+    {
+        long total = RuntimeGC.RhGetGcTotalMemory();
+        Assert.True(total > 0, "RhGetGcTotalMemory must return > 0 after allocations");
+    }
+
     // -- RhGetGeneration --
     private static void Test_RhGetGeneration_ReturnsZero()
     {
         object obj = new();
         int gen = RuntimeGC.RhGetGeneration(obj);
-        Assert.Equal(0, gen, "RhGetGeneration is a stub that returns 0");
+        Assert.Equal(0, gen, "RhGetGeneration must return 0 for a live object");
+    }
+
+    // -- RhGetGenerationSize --
+    private static void Test_RhGetGenerationSize_Gen0_Positive()
+    {
+        int gen0 = RuntimeGC.RhGetGenerationSize(0);
+        Assert.True(gen0 > 0, "RhGetGenerationSize(0) must be > 0 after allocations");
+        int gen1 = RuntimeGC.RhGetGenerationSize(1);
+        Assert.Equal(0, gen1, "RhGetGenerationSize(1) must be 0 (non-generational)");
+    }
+
+    // -- RhGetGCSegmentSize --
+    private static void Test_RhGetGCSegmentSize_Positive()
+    {
+        ulong segSize = RuntimeGC.RhGetGCSegmentSize();
+        Assert.True(segSize > 0, "RhGetGCSegmentSize must return > 0");
+    }
+
+    // -- RhGetLastGCPercentTimeInGC --
+    private static void Test_RhGetLastGCPercentTimeInGC_InRange()
+    {
+        int pct = RuntimeGC.RhGetLastGCPercentTimeInGC();
+        Assert.True(pct >= 0 && pct <= 100, "RhGetLastGCPercentTimeInGC must be in [0, 100]");
     }
 
     // -- RhGetMemoryInfo --
@@ -1108,6 +1190,36 @@ public unsafe class Kernel : Sys.Kernel
         byte[] buffer = new byte[512];
         RuntimeGC.RhGetMemoryInfo(ref buffer[0], GCKind.Any);
         Assert.True(true, "RhGetMemoryInfo returned without crashing");
+    }
+
+    // -- RhGetTotalAllocatedBytes --
+    private static void Test_RhGetTotalAllocatedBytes_Positive()
+    {
+        long allocated = RuntimeGC.RhGetTotalAllocatedBytes();
+        Assert.True(allocated > 0, "RhGetTotalAllocatedBytes must be > 0 after allocations");
+    }
+
+    // -- RhGetTotalAllocatedBytesPrecise --
+    private static void Test_RhGetTotalAllocatedBytesPrecise_MatchesNonPrecise()
+    {
+        long precise = RuntimeGC.RhGetTotalAllocatedBytesPrecise();
+        long normal = RuntimeGC.RhGetTotalAllocatedBytes();
+        Assert.Equal(normal, precise, "RhGetTotalAllocatedBytesPrecise must match RhGetTotalAllocatedBytes");
+    }
+
+    // -- RhIsPromoted --
+    private static void Test_RhIsPromoted_ReturnsFalse()
+    {
+        object obj = new();
+        bool promoted = RuntimeGC.RhIsPromoted(obj);
+        Assert.Equal(false, promoted, "RhIsPromoted must return false (non-generational)");
+    }
+
+    // -- RhIsServerGc --
+    private static void Test_RhIsServerGc_ReturnsFalse()
+    {
+        bool server = RuntimeGC.RhIsServerGc();
+        Assert.Equal(false, server, "RhIsServerGc must return false");
     }
 
     // -- RhpGcPoll --
